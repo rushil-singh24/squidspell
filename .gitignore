@@ -18,6 +18,12 @@ frontend/dist/
 ml/models/*.pkl
 ml/data/*.csv
 ml/data/motion_sequences/
+ml/results/*.png
+ml/results/*.json
+
+# Caches
+.pytest_cache/
+frontend/.vite/
 
 # OS
 .DS_Store
