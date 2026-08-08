@@ -20,18 +20,19 @@ pinned via `.nvmrc` (22.19.0) and `frontend/package.json`'s `engines` field.
 Repo is public at `github.com/rushil-singh24/squidspell`, pushed and in
 sync with `origin/main`.
 
-**Next up:** Phase 1 — Data Collection Pipeline (`ml/collect_static.py`,
-`ml/collect_motion.py`). See
-`docs/superpowers/specs/2026-08-08-squidspell-full-phases.md`, "Phase 1"
-section, for full task/acceptance-criteria detail.
+**Next up:** Phase 1's code is done and tested, but the actual dataset does not exist yet —
+that requires the project owner at a webcam (see `ml/README.md` for exact commands). Run
+`cd ml && python validate_data.py` at any time to check progress against the acceptance
+floors (150 samples/letter x24, 40 takes/class x3). Once `validate_data.py` reports overall
+PASS, Phase 2 (Feature Engineering & Model Training) can start — see
+`docs/superpowers/specs/2026-08-08-squidspell-full-phases.md`, "Phase 2" section.
 
-**Before starting Phase 1, read:**
-- `DECISIONS.md` in full (five entries so far — repo/account setup, Python
-  env, frontend toolchain, gitignored ML artifacts).
-- The Phase 1 section of the full-phases spec doc linked above.
-- The design spec at `docs/superpowers/specs/2026-08-08-squidspell-design.md`
-  for the overall product framing (not required for Phase 1's CV/ML work,
-  but relevant once Phase 5's theme/UI work starts).
+**Before starting Phase 2, read:**
+- `DECISIONS.md` in full — the `[Phase 1]` entry documents the exact constants (confidence
+  threshold, frame counts, resample length, per-take file format) Phase 2's training script
+  needs to know about.
+- `ml/README.md` for where the data actually lives.
+- The Phase 2 section of the full-phases spec doc.
 
 **Known minor follow-ups (non-blocking, deferred from Phase 0's reviews):**
 - Unused Vite-scaffold demo assets (`frontend/src/assets/hero.png`,
@@ -89,4 +90,5 @@ per phase so neither is a surprise mid-build.
   (signing on camera, including a J or Z) — an agent can't generate a real
   demo of a human signing.
 
-**Nothing blocking Phase 1.**
+**Blocking Phase 2: the real dataset must exist and `python ml/validate_data.py` must report
+overall PASS.** This is a human task (data collection), not an agent task.

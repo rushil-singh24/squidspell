@@ -67,3 +67,22 @@ not a bug), Phase 2 (trained `.pkl` files are gitignored — Phase 9's Docker
 volume mount is what makes them available to the backend at runtime instead
 of a git-tracked file), Phase 11 (README must note that models aren't in git
 and how to regenerate them).
+
+## [Phase 1] Data collection constants and per-take file format
+Decided: Static capture uses a MediaPipe handedness-score confidence threshold of 0.7
+(`is_confident()` in `collection_utils.py`), 200 frames requested per `collect_static.py`
+run (spec's 150-300 range), and a 3-second countdown. Motion capture uses a 1.3-second
+recording window, resampled to a fixed 20 frames via linear interpolation
+(`resample_sequence()`), also with a 3-second countdown; takes with fewer than 2 confident
+frames are discarded rather than saved. Each motion take is saved as its own small CSV file
+(`<LABEL>_<NNN>.csv`, header = landmark columns only, no label column) rather than one large
+combined file, indexed by a `manifest.csv` (label, source, filepath, num_raw_frames,
+captured_at) in the same directory.
+Why: These were the concrete choices the spec deliberately left open ("e.g., 200", "~1-1.5s",
+"a row (or small file)"). Per-take files + a manifest were chosen over one combined file
+because Phase 2's training script can load exactly what it needs (label + filepath) without
+parsing variable-length embedded sequences out of a single wide CSV, and it makes it trivial
+to inspect or delete one bad take without touching the rest of the dataset.
+Affects: Phase 2's `ml/train_motion.py` (must read `manifest.csv` to find each take's file,
+then load and flatten each `<LABEL>_<NNN>.csv`), `ml/validate_data.py` (already implements
+these exact floors: `MIN_STATIC_SAMPLES = 150`, `MIN_MOTION_TAKES = 40`).
