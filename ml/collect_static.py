@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import csv
 import os
-import time
 
 from collection_utils import is_confident, landmark_row_header, landmarks_to_row
 
