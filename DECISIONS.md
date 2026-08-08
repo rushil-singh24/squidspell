@@ -35,11 +35,13 @@ Affects: Phase 2 (training scripts), Phase 4 (backend importing ml/ code),
 Phase 9 (Docker — the backend image must install both requirements files).
 
 ## [Phase 0] Frontend toolchain
-Decided: Vite + React 18 + TypeScript + Tailwind CSS v4 (via the
+Decided: Vite + React 19 + TypeScript + Tailwind CSS v4 (via the
 `@tailwindcss/vite` plugin, no separate PostCSS config file).
 Why: Tailwind v4's Vite plugin removes the postcss.config/tailwind.config
 boilerplate v3 required — fewer files, same capability, and it's the
-current recommended setup for a new Vite project.
+current recommended setup for a new Vite project. (React 19 is what
+`npm create vite@latest` scaffolds by default as of this build; no reason
+to force a downgrade to 18.)
 Affects: Phase 5 (theme config lives in `frontend/src/index.css` via `@theme`,
 not `tailwind.config.js`), Phase 9 (frontend Docker build step is unchanged:
 `npm run build`).
