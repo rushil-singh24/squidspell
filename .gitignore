@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Env secrets
+.env
+.env.*
+!.env.example
+
+# ML artifacts — regenerable, kept out of git; ml/models/.gitkeep and
+# ml/data/.gitkeep hold the directories open instead
+ml/models/*.pkl
+ml/data/*.csv
+ml/data/motion_sequences/
+
+# OS
+.DS_Store
