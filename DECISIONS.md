@@ -85,4 +85,9 @@ parsing variable-length embedded sequences out of a single wide CSV, and it make
 to inspect or delete one bad take without touching the rest of the dataset.
 Affects: Phase 2's `ml/train_motion.py` (must read `manifest.csv` to find each take's file,
 then load and flatten each `<LABEL>_<NNN>.csv`), `ml/validate_data.py` (already implements
-these exact floors: `MIN_STATIC_SAMPLES = 150`, `MIN_MOTION_TAKES = 40`).
+these exact floors: `MIN_STATIC_SAMPLES = 150`, `MIN_MOTION_TAKES = 40`). Two follow-on notes
+from the final Phase 1 review: (a) the manifest's `source` column is currently always
+identical to `label` — it's reserved for future provenance (e.g. distinguishing multiple
+signers) and isn't meaningful today; (b) handedness (left/right) is not recorded anywhere,
+so the human doing data collection must sign with one consistent hand throughout — mixing
+hands would put mirrored poses into the same class and degrade the trained model.

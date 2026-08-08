@@ -1,6 +1,9 @@
 # SquidSpell — Handoff
 
-**Last updated:** Phase 0 complete and merged (commit `076b616`).
+**Last updated:** Phase 1 complete, including the final whole-branch review fix-up wave
+(raw-frame tracking in the manifest, `validate_data.py` file/header/consistency checks,
+take-index collision fix, live camera preview during countdowns, and this doc) landed on
+top of Phase 1's original completion commit `5840d2f`.
 
 **Resume from cold (fresh clone or new machine):**
 ```bash
@@ -19,6 +22,12 @@ Tailwind v4 scaffold serving a blank dark page — no real UI yet. Node is
 pinned via `.nvmrc` (22.19.0) and `frontend/package.json`'s `engines` field.
 Repo is public at `github.com/rushil-singh24/squidspell`, pushed and in
 sync with `origin/main`.
+
+**Where things stand (Phase 1 code):** `ml/collect_static.py`, `ml/collect_motion.py`, and
+`ml/validate_data.py` exist and are covered by a 35-test suite (`cd ml && python -m pytest
+tests/ -v`) — all hardware-free logic (resampling, confidence gating, take indexing, manifest
+writing, validation) is unit-tested; only the live-webcam `_run_interactive()` wiring in each
+collect_*.py is untested (expected, hardware-only code).
 
 **Next up:** Phase 1's code is done and tested, but the actual dataset does not exist yet —
 that requires the project owner at a webcam (see `ml/README.md` for exact commands). Run

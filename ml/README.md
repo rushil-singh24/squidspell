@@ -29,8 +29,8 @@ python collect_motion.py --letter negative   # repeat ~40-60 times: reposition, 
 ```
 
 Each take is a ~1.3-second recording window (after a 3-second countdown). If fewer than 2
-confident frames are captured in that window, the take is discarded automatically (printed
-to the console) and doesn't get saved — just run the command again.
+frames with a detected hand are captured in that window, the take is discarded automatically
+(printed to the console) and doesn't get saved — just run the command again.
 
 ## Checking your progress
 
@@ -52,3 +52,20 @@ anything is still short. Keep collecting for whichever letters/classes show `FAI
 
 All of the above are gitignored (see root `.gitignore`) — they're regenerable from these
 scripts and aren't meant to be committed.
+
+## Data schema
+
+Everything Phase 2 needs to know about the file formats, in one place:
+
+- **`data/static_landmarks.csv`** — 64 columns: `label`, then `x0,y0,z0,x1,y1,z1,...,x20,y20,z20`
+  (21 hand landmarks x 3 coordinates each). One row per confidently-detected static-letter
+  frame. See `landmark_row_header()` in `collection_utils.py`.
+- **`data/motion_sequences/<LABEL>_<NNN>.csv`** — one file per motion take, 63 columns
+  (`x0,y0,z0,...,x20,y20,z20`, same order as above but **no `label` column** — the label
+  lives in the manifest, not the per-take file) x N rows, where N is the fixed
+  `--resample-len` (default 20) every take is resampled to.
+- **`data/motion_sequences/manifest.csv`** — 5 columns: `label, source, filepath,
+  num_raw_frames, captured_at`. One row per take: `label` (J/Z/negative), `source` (see
+  `DECISIONS.md`), `filepath` (relative to the manifest's own directory, e.g. `J_003.csv`),
+  `num_raw_frames` (the actual raw captured-frame count before resampling — not the fixed
+  resampled length), and `captured_at` (Unix timestamp).

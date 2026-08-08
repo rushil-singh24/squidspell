@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+import re
 import time
 
 from collection_utils import flatten_landmarks, landmark_row_header, resample_sequence
@@ -39,12 +40,14 @@ def run_motion_capture(window_seconds, frame_source, hand_processor, clock_fn):
     return raw_frames
 
 
-def save_take(label, source, resampled_frames, output_dir, index, captured_at):
+def save_take(label, source, resampled_frames, num_raw_frames, output_dir, index, captured_at):
     """Write one resampled take to its own CSV file and append a manifest row.
 
     resampled_frames: list of target_len frames, each a list of 21 (x, y, z) tuples —
       one row per frame in the output file, columns matching landmark_row_header()[1:]
       (no label column in the per-take file; label lives in the manifest).
+    num_raw_frames: the actual number of raw captured frames before resampling (recorded in
+      the manifest so it reflects reality rather than the fixed resample length).
     Returns: the filename written (relative to output_dir).
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -64,7 +67,7 @@ def save_take(label, source, resampled_frames, output_dir, index, captured_at):
         writer = csv.writer(f)
         if not manifest_exists:
             writer.writerow(MANIFEST_COLUMNS)
-        writer.writerow([label, source, filename, len(resampled_frames), captured_at])
+        writer.writerow([label, source, filename, num_raw_frames, captured_at])
 
     return filename
 
@@ -81,11 +84,21 @@ def _mediapipe_hand_processor(mp_hands_instance):
 
 
 def _next_index(output_dir, label):
-    """Find the next unused index for label_NNN.csv in output_dir."""
+    """Find the next unused index for label_NNN.csv in output_dir.
+
+    Uses max(existing numeric suffixes) + 1 rather than a count of existing files, so
+    deleting a take (e.g. to discard a bad one) doesn't cause the next recording to reuse
+    — and silently overwrite — a still-existing take's filename.
+    """
     if not os.path.isdir(output_dir):
         return 0
-    existing = [f for f in os.listdir(output_dir) if f.startswith(f"{label}_") and f.endswith(".csv")]
-    return len(existing)
+    pattern = re.compile(rf"^{re.escape(label)}_(\d+)\.csv$")
+    indices = []
+    for f in os.listdir(output_dir):
+        match = pattern.match(f)
+        if match:
+            indices.append(int(match.group(1)))
+    return max(indices) + 1 if indices else 0
 
 
 def _run_interactive(args):
@@ -98,32 +111,49 @@ def _run_interactive(args):
         min_detection_confidence=0.7, min_tracking_confidence=0.5,
     )
     processor = _mediapipe_hand_processor(hands)
+    window_name = "SquidSpell motion capture (press ESC to stop early)"
 
     print(f"Get ready to sign '{args.letter}'. Starting in {args.countdown}s...")
+    aborted = False
     for remaining in range(args.countdown, 0, -1):
         print(remaining)
-        time.sleep(1)
-    print(f"Recording for {args.window_seconds}s. Perform the motion now.")
+        # Live preview during the countdown so the user can frame themselves in the shot
+        # before recording starts, instead of staring at a blank window.
+        ok, frame = cap.read()
+        if ok:
+            cv2.putText(frame, str(remaining), (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0,
+                        (0, 0, 255), 3, cv2.LINE_AA)
+            cv2.imshow(window_name, frame)
+        if cv2.waitKey(1000) & 0xFF == 27:
+            aborted = True
+            break
 
-    def frame_source():
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            cv2.imshow("SquidSpell motion capture (press ESC to stop early)", frame)
-            if cv2.waitKey(1) & 0xFF == 27:
-                break
-            yield frame
-
-    raw_frames = run_motion_capture(args.window_seconds, frame_source(), processor, time.monotonic)
-    if len(raw_frames) < 2:
-        print(f"Only captured {len(raw_frames)} confident frame(s) — need at least 2. Take discarded, try again.")
+    if aborted:
+        print("Countdown aborted (ESC pressed). No take recorded.")
     else:
-        resampled = resample_sequence(raw_frames, args.resample_len)
-        index = _next_index(args.output_dir, args.letter)
-        filename = save_take(args.letter, args.letter, resampled, args.output_dir, index, time.time())
-        print(f"Saved take '{filename}' ({len(raw_frames)} raw frames -> {args.resample_len} resampled) "
-              f"to {args.output_dir}")
+        print(f"Recording for {args.window_seconds}s. Perform the motion now.")
+
+        def frame_source():
+            while True:
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                cv2.imshow(window_name, frame)
+                if cv2.waitKey(1) & 0xFF == 27:
+                    break
+                yield frame
+
+        raw_frames = run_motion_capture(args.window_seconds, frame_source(), processor, time.monotonic)
+        if len(raw_frames) < 2:
+            print(f"Only captured {len(raw_frames)} frame(s) with a detected hand — need at least 2. "
+                  f"Take discarded, try again.")
+        else:
+            resampled = resample_sequence(raw_frames, args.resample_len)
+            index = _next_index(args.output_dir, args.letter)
+            filename = save_take(args.letter, args.letter, resampled, len(raw_frames), args.output_dir,
+                                  index, time.time())
+            print(f"Saved take '{filename}' ({len(raw_frames)} raw frames -> {args.resample_len} resampled) "
+                  f"to {args.output_dir}")
 
     cap.release()
     cv2.destroyAllWindows()

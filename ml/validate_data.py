@@ -64,12 +64,48 @@ def validate_motion(manifest_path):
     if not os.path.exists(manifest_path):
         return False, [f"MISSING: {manifest_path} does not exist yet."]
 
+    manifest_dir = os.path.dirname(manifest_path)
+    expected_take_header = landmark_row_header()[1:]
+
     with open(manifest_path, newline="") as f:
         reader = csv.DictReader(f)
-        counts = Counter(row["label"] for row in reader)
+        rows = list(reader)
+        counts = Counter(row["label"] for row in rows)
 
     ok = True
     report = []
+
+    # Per-row checks: does each take file the manifest points to actually exist, have the
+    # right header, and (within a class) a consistent row count? A mismatched row count
+    # across takes in the same class usually means --resample-len changed between sessions.
+    row_counts_by_label = {}
+    for row in rows:
+        filename = row["filepath"]
+        take_path = os.path.join(manifest_dir, filename)
+        if not os.path.exists(take_path):
+            ok = False
+            report.append(f"FAIL: '{filename}' is missing")
+            continue
+
+        with open(take_path, newline="") as f:
+            take_reader = csv.reader(f)
+            take_header = next(take_reader, None)
+            if take_header != expected_take_header:
+                ok = False
+                report.append(f"FAIL: '{filename}' has malformed header")
+                continue
+            data_row_count = sum(1 for _ in take_reader)
+
+        row_counts_by_label.setdefault(row["label"], set()).add(data_row_count)
+
+    for label, row_counts in row_counts_by_label.items():
+        if len(row_counts) > 1:
+            ok = False
+            report.append(
+                f"FAIL: '{label}' takes have inconsistent row counts {sorted(row_counts)} "
+                f"(likely --resample-len changed between recording sessions)"
+            )
+
     for label in MOTION_LABELS:
         n = counts.get(label, 0)
         status = "OK" if n >= MIN_MOTION_TAKES else "FAIL"

@@ -61,6 +61,17 @@ def test_validate_motion_missing_file_fails(tmp_path):
     assert any("MISSING" in line for line in report)
 
 
+def _write_take_file(manifest_dir, filename, num_rows=20, header=None):
+    """Write a valid per-take motion CSV (no label column) into manifest_dir."""
+    if header is None:
+        header = landmark_row_header()[1:]
+    with open(os.path.join(manifest_dir, filename), "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+        for _ in range(num_rows):
+            writer.writerow([0.0] * (len(header)))
+
+
 def test_validate_motion_passes_when_all_classes_meet_floor(tmp_path):
     path = str(tmp_path / "manifest.csv")
     with open(path, "w", newline="") as f:
@@ -68,7 +79,9 @@ def test_validate_motion_passes_when_all_classes_meet_floor(tmp_path):
         writer.writerow(["label", "source", "filepath", "num_raw_frames", "captured_at"])
         for label in ("J", "Z", "negative"):
             for i in range(MIN_MOTION_TAKES):
-                writer.writerow([label, label, f"{label}_{i:03d}.csv", 20, i])
+                filename = f"{label}_{i:03d}.csv"
+                writer.writerow([label, label, filename, 20, i])
+                _write_take_file(str(tmp_path), filename)
 
     ok, report = validate_motion(path)
     assert ok is True
@@ -81,8 +94,47 @@ def test_validate_motion_fails_when_one_class_short(tmp_path):
         writer.writerow(["label", "source", "filepath", "num_raw_frames", "captured_at"])
         for label, n in (("J", MIN_MOTION_TAKES), ("Z", MIN_MOTION_TAKES), ("negative", MIN_MOTION_TAKES - 5)):
             for i in range(n):
-                writer.writerow([label, label, f"{label}_{i:03d}.csv", 20, i])
+                filename = f"{label}_{i:03d}.csv"
+                writer.writerow([label, label, filename, 20, i])
+                _write_take_file(str(tmp_path), filename)
 
     ok, report = validate_motion(path)
     assert ok is False
     assert any("'negative'" in line and "FAIL" in line for line in report)
+
+
+def test_validate_motion_fails_when_take_file_missing(tmp_path):
+    path = str(tmp_path / "manifest.csv")
+    with open(path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["label", "source", "filepath", "num_raw_frames", "captured_at"])
+        for label in ("J", "Z", "negative"):
+            for i in range(MIN_MOTION_TAKES):
+                filename = f"{label}_{i:03d}.csv"
+                writer.writerow([label, label, filename, 20, i])
+                if not (label == "J" and i == 0):
+                    _write_take_file(str(tmp_path), filename)
+                # J_000.csv is referenced by the manifest but never written to disk.
+
+    ok, report = validate_motion(path)
+    assert ok is False
+    assert any("J_000.csv" in line and "missing" in line.lower() for line in report)
+
+
+def test_validate_motion_fails_when_take_file_has_wrong_header(tmp_path):
+    path = str(tmp_path / "manifest.csv")
+    with open(path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["label", "source", "filepath", "num_raw_frames", "captured_at"])
+        for label in ("J", "Z", "negative"):
+            for i in range(MIN_MOTION_TAKES):
+                filename = f"{label}_{i:03d}.csv"
+                writer.writerow([label, label, filename, 20, i])
+                if label == "J" and i == 0:
+                    _write_take_file(str(tmp_path), filename, header=["wrong", "header"])
+                else:
+                    _write_take_file(str(tmp_path), filename)
+
+    ok, report = validate_motion(path)
+    assert ok is False
+    assert any("J_000.csv" in line and "malformed header" in line.lower() for line in report)

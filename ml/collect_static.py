@@ -45,7 +45,8 @@ def run_static_collection(letter, num_frames, confidence_threshold, frame_source
 def append_rows_to_csv(rows, csv_path):
     """Append rows to csv_path, writing the header first if the file doesn't exist yet."""
     file_exists = os.path.exists(csv_path)
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    if os.path.dirname(csv_path):
+        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     with open(csv_path, "a", newline="") as f:
         writer = csv.writer(f)
         if not file_exists:
@@ -77,31 +78,46 @@ def _run_interactive(args):
         min_detection_confidence=0.7, min_tracking_confidence=0.5,
     )
     processor = _mediapipe_hand_processor(hands)
+    window_name = "SquidSpell data collection (press ESC to stop early)"
 
     print(f"Get ready to sign '{args.letter}'. Starting in {args.countdown}s...")
+    aborted = False
     for remaining in range(args.countdown, 0, -1):
         print(remaining)
-        time.sleep(1)
-    print(f"Recording {args.num_frames} frames for '{args.letter}'. Hold the pose.")
+        # Live preview during the countdown so the user can frame themselves in the shot
+        # before recording starts, instead of staring at a blank window.
+        ok, frame = cap.read()
+        if ok:
+            cv2.putText(frame, str(remaining), (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0,
+                        (0, 0, 255), 3, cv2.LINE_AA)
+            cv2.imshow(window_name, frame)
+        if cv2.waitKey(1000) & 0xFF == 27:
+            aborted = True
+            break
 
-    def frame_source():
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            cv2.imshow("SquidSpell data collection (press ESC to stop early)", frame)
-            if cv2.waitKey(1) & 0xFF == 27:
-                break
-            yield frame
+    if aborted:
+        print("Countdown aborted (ESC pressed). No frames recorded.")
+    else:
+        print(f"Recording {args.num_frames} frames for '{args.letter}'. Hold the pose.")
 
-    def on_progress(collected, total):
-        if collected % 20 == 0 or collected == total:
-            print(f"  {collected}/{total}")
+        def frame_source():
+            while True:
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                cv2.imshow(window_name, frame)
+                if cv2.waitKey(1) & 0xFF == 27:
+                    break
+                yield frame
 
-    rows = run_static_collection(args.letter, args.num_frames, args.confidence_threshold,
-                                  frame_source(), processor, on_progress)
-    append_rows_to_csv(rows, args.output)
-    print(f"Saved {len(rows)} rows for '{args.letter}' to {args.output}")
+        def on_progress(collected, total):
+            if collected % 20 == 0 or collected == total:
+                print(f"  {collected}/{total}")
+
+        rows = run_static_collection(args.letter, args.num_frames, args.confidence_threshold,
+                                      frame_source(), processor, on_progress)
+        append_rows_to_csv(rows, args.output)
+        print(f"Saved {len(rows)} rows for '{args.letter}' to {args.output}")
 
     cap.release()
     cv2.destroyAllWindows()

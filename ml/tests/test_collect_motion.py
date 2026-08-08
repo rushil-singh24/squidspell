@@ -1,7 +1,7 @@
 import csv
 import os
 
-from collect_motion import MOTION_LABELS, run_motion_capture, save_take
+from collect_motion import MOTION_LABELS, _next_index, run_motion_capture, save_take
 
 
 def _landmarks():
@@ -60,7 +60,8 @@ def test_save_take_writes_resampled_rows_and_manifest(tmp_path):
     output_dir = str(tmp_path / "motion_sequences")
     resampled = [_landmarks() for _ in range(20)]
 
-    filename = save_take("J", "J", resampled, output_dir, index=0, captured_at=1234567890)
+    filename = save_take("J", "J", resampled, num_raw_frames=15, output_dir=output_dir, index=0,
+                          captured_at=1234567890)
 
     take_path = os.path.join(output_dir, filename)
     with open(take_path, newline="") as f:
@@ -74,17 +75,30 @@ def test_save_take_writes_resampled_rows_and_manifest(tmp_path):
     assert manifest_rows[0]["label"] == "J"
     assert manifest_rows[0]["source"] == "J"
     assert manifest_rows[0]["filepath"] == filename
-    assert manifest_rows[0]["num_raw_frames"] == "20"
+    assert manifest_rows[0]["num_raw_frames"] == "15"  # raw count, distinct from the 20 resampled rows
 
 
 def test_save_take_appends_without_duplicating_manifest_header(tmp_path):
     output_dir = str(tmp_path / "motion_sequences")
     resampled = [_landmarks() for _ in range(20)]
 
-    save_take("J", "J", resampled, output_dir, index=0, captured_at=1)
-    save_take("J", "J", resampled, output_dir, index=1, captured_at=2)
+    save_take("J", "J", resampled, num_raw_frames=20, output_dir=output_dir, index=0, captured_at=1)
+    save_take("J", "J", resampled, num_raw_frames=20, output_dir=output_dir, index=1, captured_at=2)
 
     with open(os.path.join(output_dir, "manifest.csv"), newline="") as f:
         rows = list(csv.reader(f))
     assert rows[0] == ["label", "source", "filepath", "num_raw_frames", "captured_at"]
     assert len(rows) == 3  # header + 2 takes
+
+
+def test_next_index_uses_max_existing_suffix_not_count(tmp_path):
+    output_dir = str(tmp_path / "motion_sequences")
+    os.makedirs(output_dir)
+    for name in ("J_000.csv", "J_001.csv", "J_002.csv"):
+        with open(os.path.join(output_dir, name), "w") as f:
+            f.write("")
+    os.remove(os.path.join(output_dir, "J_001.csv"))
+
+    # len(existing) would be 2 here (J_000, J_002) and collide with J_002 on the next save;
+    # the correct next index is max(0, 2) + 1 = 3.
+    assert _next_index(output_dir, "J") == 3
