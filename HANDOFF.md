@@ -29,8 +29,12 @@ tests/ -v`) — all hardware-free logic (resampling, confidence gating, take ind
 writing, validation) is unit-tested; only the live-webcam `_run_interactive()` wiring in each
 collect_*.py is untested (expected, hardware-only code).
 
-**Next up:** Phase 1's code is done and tested, but the actual dataset does not exist yet —
-that requires the project owner at a webcam (see `ml/README.md` for exact commands). Run
+**Next up — status as of 2026-08-11: data collection has NOT started.** `ml/data/` is empty
+(just `.gitkeep`s) — 0 of 24 static letters, 0 of 3 motion classes. Phase 1's code is done and
+tested, but the actual dataset does not exist yet; that requires the project owner at a
+webcam. **`ml/README.md`'s "Collecting data" section is the exact walkthrough** — camera
+permission caveat, per-letter commands, the `for` loop trick for motion takes (~40-60 takes
+each × J/Z/negative would be painful to type individually), and how to fix a bad take. Run
 `cd ml && python validate_data.py` at any time to check progress against the acceptance
 floors (150 samples/letter x24, 40 takes/class x3). Once `validate_data.py` reports overall
 PASS, Phase 2 (Feature Engineering & Model Training) can start — see

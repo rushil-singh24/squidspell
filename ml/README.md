@@ -4,6 +4,12 @@
 
 Activate the repo's shared venv first: `cd ~/squidspell && source .venv/bin/activate && cd ml`
 
+**Before you start:** have a real ASL fingerspelling reference (chart/video) open — get the
+handshapes right yourself, since the model will learn exactly whatever you show it. Use the
+**same hand** for every letter and take, the whole way through (handedness isn't recorded, so
+mixing hands puts mirrored poses in the same class). The first time you run one of these
+scripts, macOS will prompt for camera permission for your terminal app — allow it.
+
 **Static letters (24 total: A-I, K-Y).** Run once per letter, repeating until you hit at
 least 150 confident samples for that letter (each run adds `--num-frames` more, default 200,
 so one run per letter is usually enough):
@@ -14,23 +20,35 @@ python collect_static.py --letter B
 # ...repeat for all 24 letters (A-I, K-Y — J and Z are motion letters, see below)
 ```
 
-Hold the pose steadily once recording starts — frames where MediaPipe can't confidently see
-your hand (confidence < 0.7) or doesn't detect a hand at all are automatically skipped and
-don't count toward the total. Press ESC in the video window to stop a run early.
+A window opens showing a live preview during the 3-second countdown (get into position before
+recording starts), then records until it's collected 200 confidently-detected frames and saves
+automatically — no keypress needed to end it. Frames where MediaPipe can't confidently see your
+hand (confidence < 0.7) or doesn't detect a hand at all are skipped and don't count toward the
+total; if it seems to hang, reposition your hand / check lighting. Press ESC to stop a run early.
+If you realize partway through that you signed it wrong, ESC out and just re-run the command —
+extra good samples on top of a partial bad run are harmless, no cleanup needed.
 
-**Motion letters (J, Z) and negative examples.** Run repeatedly per class until you have at
-least 40 takes each (aim for 40-60, per the spec) — each run captures exactly one take:
+**Motion letters (J, Z) and negative examples.** Each run captures exactly **one take**
+(~1.3s recording after a 3s countdown), and you need ~40-60 takes per class — typing the
+command 150 times would be miserable, so loop it:
 
 ```bash
-python collect_motion.py --letter J   # repeat ~40-60 times, performing the J motion each time
-python collect_motion.py --letter Z   # repeat ~40-60 times, performing the Z motion each time
-python collect_motion.py --letter negative   # repeat ~40-60 times: reposition, sign other
-                                              # letters, idle drift — anything that ISN'T J or Z
+for i in $(seq 1 50); do python collect_motion.py --letter J; done
+for i in $(seq 1 50); do python collect_motion.py --letter Z; done
+for i in $(seq 1 50); do python collect_motion.py --letter negative; done  # deliberately NOT J/Z:
+                                                                            # reposition, other
+                                                                            # letters, idle drift
 ```
 
-Each take is a ~1.3-second recording window (after a 3-second countdown). If fewer than 2
-frames with a detected hand are captured in that window, the take is discarded automatically
-(printed to the console) and doesn't get saved — just run the command again.
+Each loop iteration gives you a fresh 3s countdown as a natural pause between reps. If fewer
+than 2 frames with a detected hand are captured in a take's window, it's discarded
+automatically (printed to the console) and doesn't get saved — that iteration just doesn't
+count, no cleanup needed.
+
+**Fixing a bad motion take:** each take is its own file (`data/motion_sequences/J_003.csv`)
+plus a row in `manifest.csv`. To discard one, delete **both** the file and its matching
+`manifest.csv` row (matched by the `filepath` column) — `validate_data.py` will flag a
+manifest row whose file is missing, so don't delete just the file and leave the row behind.
 
 ## Checking your progress
 
