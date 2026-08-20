@@ -1,9 +1,9 @@
 # SquidSpell — Handoff
 
-**Last updated:** Phase 1 complete, including the final whole-branch review fix-up wave
-(raw-frame tracking in the manifest, `validate_data.py` file/header/consistency checks,
-take-index collision fix, live camera preview during countdowns, and this doc) landed on
-top of Phase 1's original completion commit `5840d2f`.
+**Last updated:** Phase 1 fully complete — real dataset collected and validated (2026-08-19),
+plus a post-hoc fix for a `mediapipe==1.0.0` API break (`mp.solutions.hands` was removed in
+favor of the Tasks API; see `DECISIONS.md`'s "MediaPipe Tasks API migration" entry) that
+surfaced the first time the collection scripts were run live.
 
 **Resume from cold (fresh clone or new machine):**
 ```bash
@@ -29,15 +29,12 @@ tests/ -v`) — all hardware-free logic (resampling, confidence gating, take ind
 writing, validation) is unit-tested; only the live-webcam `_run_interactive()` wiring in each
 collect_*.py is untested (expected, hardware-only code).
 
-**Next up — status as of 2026-08-11: data collection has NOT started.** `ml/data/` is empty
-(just `.gitkeep`s) — 0 of 24 static letters, 0 of 3 motion classes. Phase 1's code is done and
-tested, but the actual dataset does not exist yet; that requires the project owner at a
-webcam. **`ml/README.md`'s "Collecting data" section is the exact walkthrough** — camera
-permission caveat, per-letter commands, the `for` loop trick for motion takes (~40-60 takes
-each × J/Z/negative would be painful to type individually), and how to fix a bad take. Run
-`cd ml && python validate_data.py` at any time to check progress against the acceptance
-floors (150 samples/letter x24, 40 takes/class x3). Once `validate_data.py` reports overall
-PASS, Phase 2 (Feature Engineering & Model Training) can start — see
+**Status as of 2026-08-19: data collection is done — `python ml/validate_data.py` reports
+overall PASS.** All 24 static letters have 200 samples each (S has 400, harmless duplicate
+run) against the 150 floor, and all 3 motion classes clear the 40-take floor: J=46, Z=48,
+negative=43. `ml/data/` (gitignored, kept locally only — same "regenerable artifact"
+reasoning as `ml/models/*.pkl`, see `DECISIONS.md`) now holds the real dataset. Phase 2
+(Feature Engineering & Model Training) is next — see
 `docs/superpowers/specs/2026-08-08-squidspell-full-phases.md`, "Phase 2" section.
 
 **Before starting Phase 2, read:**
@@ -103,5 +100,5 @@ per phase so neither is a surprise mid-build.
   (signing on camera, including a J or Z) — an agent can't generate a real
   demo of a human signing.
 
-**Blocking Phase 2: the real dataset must exist and `python ml/validate_data.py` must report
-overall PASS.** This is a human task (data collection), not an agent task.
+**Phase 2 is unblocked as of 2026-08-19** — the real dataset exists and
+`python ml/validate_data.py` reports overall PASS.

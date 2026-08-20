@@ -91,3 +91,21 @@ identical to `label` — it's reserved for future provenance (e.g. distinguishin
 signers) and isn't meaningful today; (b) handedness (left/right) is not recorded anywhere,
 so the human doing data collection must sign with one consistent hand throughout — mixing
 hands would put mirrored poses into the same class and degrade the trained model.
+
+## [Phase 1] MediaPipe Tasks API migration (post-hoc fix)
+Decided: `collect_static.py` and `collect_motion.py` were originally written against the
+legacy `mp.solutions.hands.Hands` API. `mediapipe==1.0.0` (the version already pinned in
+`ml/requirements.txt`) removed that API entirely in favor of the Tasks API. Both scripts'
+`_run_interactive()` now build a `mediapipe.tasks.python.vision.HandLandmarker` in `VIDEO`
+running mode (matching the original's cross-frame tracking behavior) from a downloaded
+`ml/models/hand_landmarker.task` bundle, addressable via a new `--model-path` flag
+(default `ml/models/hand_landmarker.task`). `ml/models/*.task` is gitignored alongside the
+existing `*.pkl` rule — same "regenerable artifact" reasoning as the Phase 0 decision above.
+Why: This bug was invisible until the project owner actually ran the scripts at a webcam —
+Phase 1's 35-test suite deliberately doesn't exercise `_run_interactive()` (hardware-only
+code, per the Phase 1 entry above), so the legacy-API call only surfaced as an
+`AttributeError: module 'mediapipe' has no attribute 'solutions'` at first live use.
+Affects: Anyone re-collecting data or re-running these scripts needs
+`ml/models/hand_landmarker.task` present locally first — it is not in git. Phase 3's
+standalone inference loop will hit the same legacy-API problem if it copies the old pattern;
+it should use the same `HandLandmarker`/`VIDEO`-mode approach instead.

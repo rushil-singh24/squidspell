@@ -16,6 +16,7 @@ frontend/dist/
 # ML artifacts — regenerable, kept out of git; ml/models/.gitkeep and
 # ml/data/.gitkeep hold the directories open instead
 ml/models/*.pkl
+ml/models/*.task
 ml/data/*.csv
 ml/data/motion_sequences/
 ml/results/*.png
