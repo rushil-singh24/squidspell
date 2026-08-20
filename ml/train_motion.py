@@ -6,6 +6,7 @@ the better of Random Forest / SVM. See docs/superpowers/plans/
 from __future__ import annotations
 
 import argparse
+import json
 import os
 
 import joblib
@@ -21,6 +22,7 @@ DEFAULT_DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "motion_seque
 DEFAULT_MANIFEST_PATH = os.path.join(DEFAULT_DATA_DIR, "manifest.csv")
 DEFAULT_MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "motion_model.pkl")
 DEFAULT_REPORT_PATH = os.path.join(os.path.dirname(__file__), "results", "motion_comparison.md")
+DEFAULT_METRICS_JSON_PATH = os.path.join(os.path.dirname(__file__), "results", "motion_metrics.json")
 
 
 def load_motion_dataset(manifest_path):
@@ -56,8 +58,13 @@ def evaluate_model(model, X, y, cv_folds=5):
     predictions = model.predict(X_test)
     report = classification_report(y_test, predictions, output_dict=True, zero_division=0)
     weighted = report["weighted avg"]
-    per_class_recall = {
-        label: metrics["recall"] for label, metrics in report.items()
+    per_class_metrics = {
+        label: {
+            "precision": float(metrics["precision"]),
+            "recall": float(metrics["recall"]),
+            "f1": float(metrics["f1-score"]),
+        }
+        for label, metrics in report.items()
         if label not in ("accuracy", "macro avg", "weighted avg")
     }
 
@@ -67,9 +74,18 @@ def evaluate_model(model, X, y, cv_folds=5):
         "precision": float(weighted["precision"]),
         "recall": float(weighted["recall"]),
         "f1": float(weighted["f1-score"]),
-        "confusion_matrix": confusion_matrix(y_test, predictions).tolist(),
-        "per_class_recall": per_class_recall,
+        "confusion_matrix": [[int(v) for v in row] for row in confusion_matrix(y_test, predictions).tolist()],
+        "per_class_metrics": per_class_metrics,
     }
+
+
+def _confusion_matrix_markdown(matrix, labels):
+    header = "| actual \\ predicted | " + " | ".join(labels) + " |"
+    separator = "|---|" + "|".join(["---"] * len(labels)) + "|"
+    rows = [header, separator]
+    for label, row in zip(labels, matrix):
+        rows.append(f"| {label} | " + " | ".join(str(v) for v in row) + " |")
+    return "\n".join(rows)
 
 
 def write_motion_report(results, path):
@@ -86,14 +102,21 @@ def write_motion_report(results, path):
             f"| {r['model']} | {r['cv_accuracy_mean']:.3f} | {r['test_accuracy']:.3f} | "
             f"{r['precision']:.3f} | {r['recall']:.3f} | {r['f1']:.3f} |"
         )
-    lines.append("\n## Per-class recall (negative-class recall is the key anti-false-trigger metric)\n")
-    lines.append("| Model | J recall | Z recall | negative recall |")
-    lines.append("|---|---|---|---|")
+    lines.append(
+        "\n## Per-class precision/recall/F1 "
+        "(negative-class recall is the key anti-false-trigger metric)\n"
+    )
+    lines.append("| Model | Class | Precision | Recall | F1 |")
+    lines.append("|---|---|---|---|---|")
     for r in results:
-        pcr = r["per_class_recall"]
-        lines.append(f"| {r['model']} | {pcr.get('J', 0):.3f} | {pcr.get('Z', 0):.3f} | {pcr.get('negative', 0):.3f} |")
+        for label in ("J", "Z", "negative"):
+            metrics = r["per_class_metrics"].get(label, {"precision": 0.0, "recall": 0.0, "f1": 0.0})
+            lines.append(
+                f"| {r['model']} | {label} | {metrics['precision']:.3f} | "
+                f"{metrics['recall']:.3f} | {metrics['f1']:.3f} |"
+            )
 
-    negative_recalls = {r["model"]: r["per_class_recall"].get("negative", 0.0) for r in results}
+    negative_recalls = {r["model"]: r["per_class_metrics"].get("negative", {}).get("recall", 0.0) for r in results}
     best_negative_model = max(negative_recalls, key=negative_recalls.get)
     lines.append("\n## Negative-class recall (anti-false-trigger)\n")
     lines.append(
@@ -101,7 +124,10 @@ def write_motion_report(results, path):
         "firing a J/Z detection on non-J/Z motion (the key anti-false-trigger metric)."
     )
     for r in results:
-        lines.append(f"- **{r['model']}**: negative recall = {r['per_class_recall'].get('negative', 0.0):.3f}")
+        lines.append(
+            f"- **{r['model']}**: negative recall = "
+            f"{r['per_class_metrics'].get('negative', {}).get('recall', 0.0):.3f}"
+        )
     lines.append(
         f"\nBest negative-class recall: **{best_negative_model}** "
         f"({negative_recalls[best_negative_model]:.3f})."
@@ -111,7 +137,8 @@ def write_motion_report(results, path):
         f.write("\n".join(lines) + "\n")
 
 
-def train_and_export(manifest_path, model_out_path, report_out_path):
+def train_and_export(manifest_path, model_out_path, report_out_path,
+                      metrics_json_out_path=None):
     X, y = load_motion_dataset(manifest_path)
 
     results = []
@@ -129,16 +156,28 @@ def train_and_export(manifest_path, model_out_path, report_out_path):
     write_motion_report(results, report_out_path)
 
     classes = sorted(set(y))
+    best_result = next(r for r in results if r["model"] == best["model"])
+    with open(report_out_path, "a") as f:
+        f.write(f"\n## Confusion matrix — winning model ({best['model']})\n\n")
+        f.write(_confusion_matrix_markdown(best_result["confusion_matrix"], classes))
+        f.write("\n")
+
+    if metrics_json_out_path:
+        metrics_dir = os.path.dirname(metrics_json_out_path)
+        if metrics_dir:
+            os.makedirs(metrics_dir, exist_ok=True)
+        with open(metrics_json_out_path, "w") as f:
+            json.dump(results, f, indent=2)
+
     model_dir = os.path.dirname(model_out_path)
     if model_dir:
         os.makedirs(model_dir, exist_ok=True)
     joblib.dump({"model": final_model, "classes": classes}, model_out_path)
 
-    best_result = next(r for r in results if r["model"] == best["model"])
     return {
         "model_name": best["model"],
         "test_accuracy": best_result["test_accuracy"],
-        "negative_recall": best_result["per_class_recall"].get("negative", 0.0),
+        "negative_recall": best_result["per_class_metrics"]["negative"]["recall"],
     }
 
 
@@ -148,7 +187,9 @@ def main():
     parser.add_argument("--model-out", default=DEFAULT_MODEL_PATH)
     parser.add_argument("--report-out", default=DEFAULT_REPORT_PATH)
     args = parser.parse_args()
-    summary = train_and_export(args.manifest_path, args.model_out, args.report_out)
+    summary = train_and_export(
+        args.manifest_path, args.model_out, args.report_out, DEFAULT_METRICS_JSON_PATH
+    )
     print(f"Winner: {summary['model_name']}, test accuracy {summary['test_accuracy']:.3f}, "
           f"negative-class recall {summary['negative_recall']:.3f}")
 

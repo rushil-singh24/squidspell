@@ -49,12 +49,15 @@ def test_build_candidate_models_has_two_named_models():
     assert set(models.keys()) == {"random_forest", "svm"}
 
 
-def test_evaluate_model_reports_per_class_recall(tiny_motion_dataset):
+def test_evaluate_model_reports_per_class_metrics(tiny_motion_dataset):
     X, y = load_motion_dataset(tiny_motion_dataset)
     model = build_candidate_models()["random_forest"]
     result = evaluate_model(model, X, y, cv_folds=3)
-    assert "negative" in result["per_class_recall"]
-    assert 0.0 <= result["per_class_recall"]["negative"] <= 1.0
+    assert "negative" in result["per_class_metrics"]
+    for metric in ("precision", "recall", "f1"):
+        assert metric in result["per_class_metrics"]["negative"]
+        assert isinstance(result["per_class_metrics"]["negative"][metric], float)
+        assert 0.0 <= result["per_class_metrics"]["negative"][metric] <= 1.0
 
 
 def test_write_motion_report_mentions_negative_recall(tmp_path):
@@ -62,7 +65,11 @@ def test_write_motion_report_mentions_negative_recall(tmp_path):
         "model": "random_forest", "cv_accuracy_mean": 0.9, "test_accuracy": 0.9,
         "precision": 0.9, "recall": 0.9, "f1": 0.9,
         "confusion_matrix": [[2, 0, 0], [0, 2, 0], [0, 0, 2]],
-        "per_class_recall": {"J": 0.9, "Z": 0.85, "negative": 0.95},
+        "per_class_metrics": {
+            "J": {"precision": 0.9, "recall": 0.9, "f1": 0.9},
+            "Z": {"precision": 0.85, "recall": 0.85, "f1": 0.85},
+            "negative": {"precision": 0.95, "recall": 0.95, "f1": 0.95},
+        },
     }]
     out_path = tmp_path / "motion_comparison.md"
     write_motion_report(results, str(out_path))

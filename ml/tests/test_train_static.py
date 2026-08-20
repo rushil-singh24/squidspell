@@ -75,6 +75,7 @@ def test_train_and_export_produces_loadable_model(tiny_csv, tmp_path):
     assert os.path.exists(model_path)
     assert os.path.exists(report_path)
     assert summary["feature_set"] in ("raw", "engineered")
+    assert isinstance(summary["best_params"], dict)
 
     bundle = joblib.load(model_path)
     assert set(bundle.keys()) == {"model", "feature_set", "classes"}

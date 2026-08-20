@@ -6,6 +6,7 @@ Task 3, for the exact pipeline. Run for real: `python train_static.py`.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 
 import joblib
@@ -25,6 +26,7 @@ DEFAULT_CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "static_landm
 DEFAULT_MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "static_model.pkl")
 DEFAULT_REPORT_PATH = os.path.join(os.path.dirname(__file__), "results", "comparison.md")
 DEFAULT_CONFUSION_MATRIX_PATH = os.path.join(os.path.dirname(__file__), "results", "static_confusion_matrix.png")
+DEFAULT_METRICS_JSON_PATH = os.path.join(os.path.dirname(__file__), "results", "metrics.json")
 
 TUNING_GRIDS = {
     "random_forest": {"n_estimators": [100, 300], "max_depth": [None, 10, 20]},
@@ -78,8 +80,19 @@ def evaluate_model(model, X, y, cv_folds=5):
     }
 
 
+def _confusion_matrix_markdown(matrix, labels):
+    header = "| actual \\ predicted | " + " | ".join(labels) + " |"
+    separator = "|---|" + "|".join(["---"] * len(labels)) + "|"
+    rows = [header, separator]
+    for label, row in zip(labels, matrix):
+        rows.append(f"| {label} | " + " | ".join(str(v) for v in row) + " |")
+    return "\n".join(rows)
+
+
 def write_comparison_report(results, path):
-    os.makedirs(os.path.dirname(path), exist_ok=True) if os.path.dirname(path) else None
+    report_dir = os.path.dirname(path)
+    if report_dir:
+        os.makedirs(report_dir, exist_ok=True)
     lines = [
         "# Static Classifier: Raw vs. Engineered Feature Comparison\n",
         "| Model | Feature Set | CV Accuracy | Test Accuracy | Precision | Recall | F1 |",
@@ -95,7 +108,7 @@ def write_comparison_report(results, path):
 
 
 def train_and_export(csv_path, model_out_path, report_out_path,
-                      confusion_matrix_out_path=None):
+                      confusion_matrix_out_path=None, metrics_json_out_path=None):
     raw_X, engineered_X, y = load_static_dataset(csv_path)
     feature_sets = {"raw": raw_X, "engineered": engineered_X}
 
@@ -117,6 +130,7 @@ def train_and_export(csv_path, model_out_path, report_out_path,
     )
     tuned.fit(X_train, y_train)
     final_model = tuned.best_estimator_
+    best_params = {k: v for k, v in tuned.best_params_.items()}
     predictions = final_model.predict(X_test)
     final_test_accuracy = float((predictions == pd.Series(y_test).values).mean())
 
@@ -129,7 +143,31 @@ def train_and_export(csv_path, model_out_path, report_out_path,
     write_comparison_report(results, report_out_path)
 
     classes = sorted(set(y))
-    os.makedirs(os.path.dirname(model_out_path), exist_ok=True)
+    tuned_matrix = confusion_matrix(y_test, predictions, labels=classes).tolist()
+    with open(report_out_path, "a") as f:
+        f.write("\n## Tuned winner\n\n")
+        f.write(
+            f"After comparing all {len(results)} untuned model/feature-set combinations above, "
+            f"`GridSearchCV` tuned the best-by-CV-accuracy combination: **{best['model']}** on "
+            f"**{best['feature_set']}** features.\n\n"
+        )
+        f.write(f"- Best params: `{best_params}`\n")
+        f.write(f"- Tuned test accuracy: **{final_test_accuracy:.3f}** "
+                f"(untuned test accuracy for this combination: {best['test_accuracy']:.3f})\n\n")
+        f.write("### Confusion matrix — tuned winner\n\n")
+        f.write(_confusion_matrix_markdown(tuned_matrix, classes))
+        f.write("\n")
+
+    if metrics_json_out_path:
+        metrics_dir = os.path.dirname(metrics_json_out_path)
+        if metrics_dir:
+            os.makedirs(metrics_dir, exist_ok=True)
+        with open(metrics_json_out_path, "w") as f:
+            json.dump(results, f, indent=2)
+
+    model_dir = os.path.dirname(model_out_path)
+    if model_dir:
+        os.makedirs(model_dir, exist_ok=True)
     joblib.dump(
         {"model": final_model, "feature_set": best["feature_set"], "classes": classes},
         model_out_path,
@@ -137,7 +175,7 @@ def train_and_export(csv_path, model_out_path, report_out_path,
 
     return {
         "model_name": best["model"], "feature_set": best["feature_set"],
-        "test_accuracy": final_test_accuracy,
+        "test_accuracy": final_test_accuracy, "best_params": best_params,
     }
 
 
@@ -148,10 +186,11 @@ def main():
     parser.add_argument("--report-out", default=DEFAULT_REPORT_PATH)
     args = parser.parse_args()
     summary = train_and_export(
-        args.csv_path, args.model_out, args.report_out, DEFAULT_CONFUSION_MATRIX_PATH
+        args.csv_path, args.model_out, args.report_out, DEFAULT_CONFUSION_MATRIX_PATH,
+        DEFAULT_METRICS_JSON_PATH,
     )
     print(f"Winner: {summary['model_name']} ({summary['feature_set']} features), "
-          f"test accuracy {summary['test_accuracy']:.3f}")
+          f"test accuracy {summary['test_accuracy']:.3f}, best params {summary['best_params']}")
 
 
 if __name__ == "__main__":

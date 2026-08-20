@@ -1,6 +1,13 @@
 """Trajectory-level feature extraction for resampled motion sequences
 (J / Z / negative). Pure, hardware-free — see docs/superpowers/plans/
 2026-08-19-phase-2-model-training.md, Task 2, for the exact feature layout.
+
+Note: `path_length`, `curvature`, and `direction_reversals` scale with how
+many frames are passed in and over what wall-clock span they were captured,
+so callers must resample their input to the same frame count (20) used at
+training time via `collection_utils.resample_sequence(frames, target_len=20)`
+before calling `extract_motion_features()` — do not feed a fixed-time
+rolling buffer of a different length.
 """
 from __future__ import annotations
 

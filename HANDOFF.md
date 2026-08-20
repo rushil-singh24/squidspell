@@ -42,14 +42,31 @@ reasoning as `ml/models/*.pkl`, see `DECISIONS.md`) now holds the real dataset.
 (49-float engineered motion-trajectory features) are covered by unit tests against synthetic
 fixtures. `ml/train_static.py` and `ml/train_motion.py` were then run for real against the
 Phase 1 dataset (not just tests) — see `DECISIONS.md`'s `[Phase 2]` entry for the full
-comparison tables. **Static: random forest + engineered features won, test accuracy 0.994**
+comparison tables. **Static: random forest + engineered features won** (see `DECISIONS.md`'s
+`[Phase 2]` entry for the tuned hyperparameters and test accuracy)
 (`ml/models/static_model.pkl`, bundle = `{"model", "feature_set", "classes"}`).
-**Motion: random forest won, test accuracy 0.893, negative-class recall 0.778**
+**Motion: random forest won** — see `DECISIONS.md` for test accuracy and per-class
+precision/recall/F1, including negative-class (anti-false-trigger) recall
 (`ml/models/motion_model.pkl`, bundle = `{"model", "classes"}`). Both `.pkl` files are
 gitignored (regenerable — rerun the two training scripts to reproduce); `ml/results/
-comparison.md` and `ml/results/motion_comparison.md` are committed. The full 55-test suite
-(Phase 1's 35 + Phase 2's 20) passes. **Phase 3 (Standalone Real-Time Inference Loop) is next**
+comparison.md` and `ml/results/motion_comparison.md` are committed (each now also includes a
+Markdown confusion-matrix table for the winning model). The full test suite (Phase 1's 35 +
+Phase 2's 20+) passes. **If Phase 3 live testing shows J/Z false-triggering on ordinary hand
+movement, the correct response is collecting more negative takes and retraining — not tuning
+thresholds in the inference loop.** **Phase 3 (Standalone Real-Time Inference Loop) is next**
 — see `docs/superpowers/specs/2026-08-08-squidspell-full-phases.md`, "Phase 3" section.
+
+Both training scripts also write a machine-readable JSON metrics artifact —
+`ml/results/metrics.json` (static) and `ml/results/motion_metrics.json` (motion) — for Phase 4's
+`GET /metrics` endpoint to serve directly. Both are gitignored (`ml/results/*.json`), so **Phase
+4 must run `python ml/train_static.py` and `python ml/train_motion.py` once locally to
+materialize these JSON files** — they will not exist from a fresh clone.
+
+`ml/features_motion.py`'s trajectory features (`path_length`, `curvature`,
+`direction_reversals`) are frame-count/timebase-sensitive (trained on exactly-20-frame resampled
+takes) and are not camera-distance invariant (unlike the reused static-handshape sub-block,
+which is scale-normalized) — see `DECISIONS.md`'s `[Phase 2]` entry for the exact remedies Phase
+3/4 need if either issue surfaces in live testing.
 
 **Before starting Phase 3, read:**
 - `DECISIONS.md` in full — the `[Phase 1]` entry documents the data-collection constants, and
