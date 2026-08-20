@@ -109,3 +109,39 @@ Affects: Anyone re-collecting data or re-running these scripts needs
 `ml/models/hand_landmarker.task` present locally first — it is not in git. Phase 3's
 standalone inference loop will hit the same legacy-API problem if it copies the old pattern;
 it should use the same `HandLandmarker`/`VIDEO`-mode approach instead.
+
+## [Phase 2] Real training run results and winning models
+Decided: Trained on the real Phase 1 dataset (24 static letters ~200 samples each, J/Z/negative
+motion takes at 46/48/43). `python train_static.py` compared 4 model types (random forest, SVM,
+gradient boosting, logistic regression) across 2 feature sets (raw 63-float landmark coordinates
+vs. the 40-float engineered features from `features_static.py`), then ran `GridSearchCV` on the
+best combination. Winner: **random forest on engineered features**, CV accuracy 0.994, test
+accuracy 0.994 (see `ml/results/comparison.md` for the full 8-row table; next best was gradient
+boosting/engineered at 0.990 test accuracy, and raw-feature SVM was worst at 0.849). `python
+train_motion.py` compared random forest vs. SVM on the 49-float motion-trajectory features.
+Winner: **random forest**, test accuracy 0.893, per-class recall J=0.889, Z=1.000,
+**negative=0.778** (see `ml/results/motion_comparison.md`). The negative-class recall is lower
+than the other two classes but not alarming given the test split is only ~9 negative takes (20%
+of 43) — worth more data if false-triggering becomes a problem in Phase 3 testing. Exported
+bundles: `ml/models/static_model.pkl` = `{"model", "feature_set", "classes"}` (`feature_set` is
+the string `"engineered"`), `ml/models/motion_model.pkl` = `{"model", "classes"}` (no
+`feature_set` key — the motion script only ever uses one feature representation). `matplotlib`
+(already pinned in `ml/requirements.txt` since the Task 3 commit) is used only for
+`ml/results/static_confusion_matrix.png`, a gitignored, regenerable diagnostic plot — no other
+code path needs it.
+Why: This is the only Phase 2 task that runs against real (not synthetic-fixture) data, so
+these are the actual numbers the project will ship with, not projections. Random forest won
+both classifiers, which is unsurprising for small, mostly-tabular-feature datasets like these.
+Engineered features clearly beat raw landmark coordinates for the static classifier (0.994 vs.
+0.987 for random forest, and a much larger gap for weaker models like SVM: 0.941 vs. 0.849) —
+confirming the effort put into `features_static.py`'s hand-normalized distances/angles paid off.
+Affects: Phase 3 (standalone inference loop) and Phase 4 (backend) must load
+`ml/models/static_model.pkl` via `joblib.load(...)` and branch on the loaded dict's
+`feature_set` key before calling `.predict()`: if it reads `"engineered"`, run
+`extract_static_features()` from `ml/features_static.py` on the raw landmarks first; if it were
+ever `"raw"`, feed the flat 63-float landmark list directly. `ml/models/motion_model.pkl` has no
+such branch — always run `extract_motion_features()` from `ml/features_motion.py` first. Both
+loaders need the same landmark tuple ordering assumption already shared by
+`ml/train_static.py`/`ml/train_motion.py` (`(x, y, z)` triples in MediaPipe's 21-landmark index
+order) — see `ml/features_static.py`'s `FINGERS`/`FINGERTIPS` constants and
+`ml/features_motion.py`'s reuse of `extract_static_features` on `frames[0]`.

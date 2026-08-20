@@ -1,9 +1,11 @@
 # SquidSpell — Handoff
 
-**Last updated:** Phase 1 fully complete — real dataset collected and validated (2026-08-19),
-plus a post-hoc fix for a `mediapipe==1.0.0` API break (`mp.solutions.hands` was removed in
-favor of the Tasks API; see `DECISIONS.md`'s "MediaPipe Tasks API migration" entry) that
-surfaced the first time the collection scripts were run live.
+**Last updated:** Phase 2 fully complete — static and motion classifiers trained on the real
+Phase 1 dataset and exported (2026-08-19). Winning static model: **random forest on engineered
+features**, test accuracy 0.994. Winning motion model: **random forest**, test accuracy 0.893,
+negative-class (anti-false-trigger) recall 0.778. See `DECISIONS.md`'s "[Phase 2] Real training
+run results and winning models" entry for the full comparison numbers and the exact
+`static_model.pkl`/`motion_model.pkl` bundle shapes Phase 3/4 need to load.
 
 **Resume from cold (fresh clone or new machine):**
 ```bash
@@ -29,20 +31,33 @@ tests/ -v`) — all hardware-free logic (resampling, confidence gating, take ind
 writing, validation) is unit-tested; only the live-webcam `_run_interactive()` wiring in each
 collect_*.py is untested (expected, hardware-only code).
 
-**Status as of 2026-08-19: data collection is done — `python ml/validate_data.py` reports
-overall PASS.** All 24 static letters have 200 samples each (S has 400, harmless duplicate
-run) against the 150 floor, and all 3 motion classes clear the 40-take floor: J=46, Z=48,
-negative=43. `ml/data/` (gitignored, kept locally only — same "regenerable artifact"
-reasoning as `ml/models/*.pkl`, see `DECISIONS.md`) now holds the real dataset. Phase 2
-(Feature Engineering & Model Training) is next — see
-`docs/superpowers/specs/2026-08-08-squidspell-full-phases.md`, "Phase 2" section.
+**Status as of 2026-08-19 (Phase 1): data collection is done — `python ml/validate_data.py`
+reports overall PASS.** All 24 static letters have 200 samples each (S has 400, harmless
+duplicate run) against the 150 floor, and all 3 motion classes clear the 40-take floor: J=46,
+Z=48, negative=43. `ml/data/` (gitignored, kept locally only — same "regenerable artifact"
+reasoning as `ml/models/*.pkl`, see `DECISIONS.md`) now holds the real dataset.
 
-**Before starting Phase 2, read:**
-- `DECISIONS.md` in full — the `[Phase 1]` entry documents the exact constants (confidence
-  threshold, frame counts, resample length, per-take file format) Phase 2's training script
-  needs to know about.
+**Status as of 2026-08-19 (Phase 2): feature engineering and model training are done.**
+`ml/features_static.py` (40-float engineered static-hand features) and `ml/features_motion.py`
+(49-float engineered motion-trajectory features) are covered by unit tests against synthetic
+fixtures. `ml/train_static.py` and `ml/train_motion.py` were then run for real against the
+Phase 1 dataset (not just tests) — see `DECISIONS.md`'s `[Phase 2]` entry for the full
+comparison tables. **Static: random forest + engineered features won, test accuracy 0.994**
+(`ml/models/static_model.pkl`, bundle = `{"model", "feature_set", "classes"}`).
+**Motion: random forest won, test accuracy 0.893, negative-class recall 0.778**
+(`ml/models/motion_model.pkl`, bundle = `{"model", "classes"}`). Both `.pkl` files are
+gitignored (regenerable — rerun the two training scripts to reproduce); `ml/results/
+comparison.md` and `ml/results/motion_comparison.md` are committed. The full 55-test suite
+(Phase 1's 35 + Phase 2's 20) passes. **Phase 3 (Standalone Real-Time Inference Loop) is next**
+— see `docs/superpowers/specs/2026-08-08-squidspell-full-phases.md`, "Phase 3" section.
+
+**Before starting Phase 3, read:**
+- `DECISIONS.md` in full — the `[Phase 1]` entry documents the data-collection constants, and
+  the `[Phase 2]` entry documents the winning models and the exact bundle keys
+  (`static_model.pkl`'s `feature_set` key in particular) Phase 3 must branch on before calling
+  `.predict()`.
 - `ml/README.md` for where the data actually lives.
-- The Phase 2 section of the full-phases spec doc.
+- The Phase 3 section of the full-phases spec doc.
 
 **Known minor follow-ups (non-blocking, deferred from Phase 0's reviews):**
 - Unused Vite-scaffold demo assets (`frontend/src/assets/hero.png`,
@@ -100,5 +115,7 @@ per phase so neither is a surprise mid-build.
   (signing on camera, including a J or Z) — an agent can't generate a real
   demo of a human signing.
 
-**Phase 2 is unblocked as of 2026-08-19** — the real dataset exists and
-`python ml/validate_data.py` reports overall PASS.
+**Phase 2 is complete as of 2026-08-19** — static and motion classifiers are trained and
+exported (see the status section above for the winning models/accuracy). **Phase 3 is
+unblocked** — it can proceed against `ml/models/static_model.pkl` and `ml/models/motion_model.pkl`
+as soon as a human is available at the webcam to verify live predictions.
