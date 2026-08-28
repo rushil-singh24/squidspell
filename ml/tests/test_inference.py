@@ -202,3 +202,69 @@ def test_gate_reset_returns_to_idle():
 
 def test_start_poses_default_mapping():
     assert MOTION_START_POSES == {"I": "J", "D": "Z"}
+
+
+from inference import FrameResult, InferenceEngine
+
+
+def test_engine_static_commit_flows_through():
+    eng = InferenceEngine(_ScriptedStatic("A", 0.9), _ScriptedMotion("J", 0.9))
+    # still hand at center -> gate never arms; smoother commits "A" after 500ms
+    r = None
+    for t in range(0, 700, 33):
+        r = eng.process_frame(_hand_at(0.5, 0.5), now_ms=t)
+    assert isinstance(r, FrameResult)
+    # somewhere in that loop "A" was committed exactly once
+    # re-run fresh and capture:
+    eng2 = InferenceEngine(_ScriptedStatic("A", 0.9), _ScriptedMotion("J", 0.9))
+    commits = [
+        eng2.process_frame(_hand_at(0.5, 0.5), now_ms=t).committed_letter
+        for t in range(0, 700, 33)
+    ]
+    assert commits.count("A") == 1
+
+
+def test_engine_suppresses_static_commit_while_gate_armed():
+    # static predictor always says "I" (a start pose) with high confidence;
+    # moving buffer -> gate arms -> static commits must be suppressed
+    eng = InferenceEngine(_ScriptedStatic("I", 0.9), _ScriptedMotion("negative", 0.1))
+    xs = [0.2 + 0.02 * k for k in range(12)]   # steady movement, never "stops"
+    commits = []
+    for k, x in enumerate(xs):
+        res = eng.process_frame(_hand_at(x, 0.5), now_ms=k * 100)
+        commits.append((res.motion_active, res.committed_letter))
+    # gate became active at some point
+    assert any(active for active, _ in commits)
+    # while active, no static letter was committed
+    assert all(letter is None for active, letter in commits if active)
+
+
+def test_engine_motion_commit_clears_buffer_and_smoother():
+    eng = InferenceEngine(_ScriptedStatic("I", 0.9), _ScriptedMotion("J", 0.95))
+    # arm with movement
+    for k in range(10):
+        eng.process_frame(_hand_at(0.2 + 0.03 * k, 0.5), now_ms=k * 30)
+    # then hold still to trigger classification
+    res = None
+    for k in range(10, 20):
+        res = eng.process_frame(_hand_at(0.5, 0.5), now_ms=k * 30)
+        if res.committed_letter:
+            break
+    assert res.committed_letter == "J"
+    assert res.committed_source == "motion"
+    assert len(eng._buffer) == 0
+
+
+def test_engine_handles_no_hand_frames():
+    eng = InferenceEngine(_ScriptedStatic("A", 0.9), _ScriptedMotion("J", 0.9))
+    res = eng.process_frame(None, now_ms=0)
+    assert res.static_label is None
+    assert res.static_confidence == 0.0
+    assert res.committed_letter is None
+
+
+def test_engine_reset():
+    eng = InferenceEngine(_ScriptedStatic("A", 0.9), _ScriptedMotion("J", 0.9))
+    eng.process_frame(_hand_at(0.5, 0.5), now_ms=0)
+    eng.reset()
+    assert len(eng._buffer) == 0

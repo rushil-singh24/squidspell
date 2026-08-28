@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter, deque
+from dataclasses import dataclass
 
 # --- Static smoothing -------------------------------------------------------
 STATIC_VOTE_WINDOW = 8      # frames in the majority-vote window
@@ -149,3 +150,82 @@ class MotionGate:
     def reset(self):
         self._armed = False
         self._armed_at_len = 0
+
+
+@dataclass
+class FrameResult:
+    static_label: str | None
+    static_confidence: float
+    motion_active: bool
+    committed_letter: str | None
+    committed_source: str | None
+
+
+class InferenceEngine:
+    """Owns the rolling landmark buffer and merges the static + motion paths.
+    One call per webcam frame. The precedence rule: while the motion gate is
+    armed, static per-frame commits are suppressed (and the smoother is not
+    advanced) so a J/Z in progress does not also spam static letters.
+    """
+
+    def __init__(
+        self,
+        static_predictor,
+        motion_predictor,
+        *,
+        buffer_len=MOTION_BUFFER_LEN,
+        smoother=None,
+        gate=None,
+    ):
+        self._static = static_predictor
+        self._buffer = deque(maxlen=buffer_len)
+        self._smoother = smoother if smoother is not None else StaticSmoother()
+        self._gate = (
+            gate
+            if gate is not None
+            else MotionGate(static_predictor, motion_predictor, buffer_len=buffer_len)
+        )
+
+    def process_frame(self, landmarks, now_ms):
+        hand_present = landmarks is not None
+        if hand_present:
+            self._buffer.append(landmarks)
+
+        committed_motion, should_clear = self._gate.update(
+            list(self._buffer), hand_present, now_ms
+        )
+        if should_clear:
+            self._buffer.clear()
+            self._smoother.reset()
+
+        if committed_motion is not None:
+            return FrameResult(
+                static_label=None,
+                static_confidence=0.0,
+                motion_active=self._gate.active,
+                committed_letter=committed_motion,
+                committed_source="motion",
+            )
+
+        if hand_present:
+            static_label, static_conf = self._static.predict(landmarks)
+        else:
+            static_label, static_conf = None, 0.0
+
+        if self._gate.active:
+            committed_static = None
+        else:
+            committed_static = self._smoother.update(static_label, now_ms)
+
+        return FrameResult(
+            static_label=static_label,
+            static_confidence=static_conf,
+            motion_active=self._gate.active,
+            committed_letter=committed_static,
+            committed_source="static" if committed_static else None,
+        )
+
+    def reset(self):
+        self._buffer.clear()
+        self._smoother.reset()
+        self._gate.reset()
