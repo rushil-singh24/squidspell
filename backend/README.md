@@ -96,17 +96,20 @@ Default: `http://127.0.0.1:8000`
     }
     ```
 
+    The canonical outbound field table lives in `DECISIONS.md` `[Phase 4]`
+    (Outbound prediction-event schema); it is reproduced here for convenience.
+
     | field | type | meaning |
     |---|---|---|
-    | `prediction` | `str \| null` | Committed letter this frame (after smoothing/gating), else `null` |
-    | `confidence` | `number` | Confidence of the commit, or `0.0` if no commit |
-    | `source` | `"static" \| "motion" \| null` | Which classifier made the commit, or `null` |
-    | `static_label` | `str \| null` | Raw per-frame static prediction (intermediate, unsmoothed) |
-    | `static_confidence` | `number` | Confidence of the raw static prediction |
-    | `motion_active` | `bool` | True if a J/Z motion is mid-flight |
-    | `fps` | `int` | Server-measured frame rate over the last 1.0s (0 until ≥2 frames) |
-    | `timestamp` | `int` | Server epoch-ms when the frame was processed |
-    | `client_timestamp` | `int \| null` | Echo of the inbound `t` field |
+    | `prediction` | `str \| null` | `FrameResult.committed_letter` — the letter committed *this* frame, else `null` |
+    | `confidence` | `number` | `FrameResult.committed_confidence` when `prediction` is set, else `0.0` |
+    | `source` | `"static" \| "motion" \| null` | `FrameResult.committed_source` |
+    | `static_label` | `str \| null` | `FrameResult.static_label` — raw per-frame static prediction, for the corner readout |
+    | `static_confidence` | `number` | `FrameResult.static_confidence` |
+    | `motion_active` | `bool` | `FrameResult.motion_active` — true while a J/Z gesture is mid-flight |
+    | `fps` | `int` | server-measured receive rate over the last 1.0s (`0` until ≥2 frames in the window) |
+    | `timestamp` | `int` | server epoch-ms (`int(time.time() * 1000)`) at send |
+    | `client_timestamp` | `int \| null` | echo of the inbound `t` field, or `null` |
 
   - **Malformed frame** (not 21 [x,y,z] triples and not null):
     ```json

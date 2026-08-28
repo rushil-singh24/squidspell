@@ -54,7 +54,10 @@ def test_metrics_degrades_when_files_missing(tmp_path, monkeypatch):
 
 def test_models_info_test_accuracy_from_metrics(tmp_path, monkeypatch):
     (tmp_path / "metrics.json").write_text(json.dumps(
-        [{"model": "svm", "test_accuracy": 0.85}, {"model": "random_forest", "test_accuracy": 0.99}]
+        [
+            {"model": "svm", "feature_set": "engineered", "test_accuracy": 0.85},
+            {"model": "random_forest", "feature_set": "engineered", "test_accuracy": 0.99},
+        ]
     ))
     (tmp_path / "motion_metrics.json").write_text(json.dumps([{"model": "random_forest", "test_accuracy": 0.893}]))
     monkeypatch.setattr("app.prediction.STATIC_METRICS_PATH", tmp_path / "metrics.json")
@@ -63,3 +66,33 @@ def test_models_info_test_accuracy_from_metrics(tmp_path, monkeypatch):
     info = svc.models_info()
     assert info["static"]["test_accuracy"] == 0.99
     assert info["motion"]["test_accuracy"] == 0.893
+
+
+def test_metrics_degrades_on_corrupt_file(tmp_path, monkeypatch):
+    (tmp_path / "metrics.json").write_text('{ this is not valid json')
+    (tmp_path / "motion_metrics.json").write_text('[]')
+    monkeypatch.setattr("app.prediction.STATIC_METRICS_PATH", tmp_path / "metrics.json")
+    monkeypatch.setattr("app.prediction.MOTION_METRICS_PATH", tmp_path / "motion_metrics.json")
+    svc = PredictionService(FakeStatic(), FakeMotion())
+    m = svc.metrics()
+    assert m["static"] == [] and "metrics.json" in m["missing"]
+    assert m["motion"] == []
+    # models_info must also not raise
+    assert svc.models_info()["static"]["test_accuracy"] is None
+
+
+def test_best_accuracy_ignores_null_and_non_numeric_rows(tmp_path, monkeypatch):
+    (tmp_path / "metrics.json").write_text(json.dumps([
+        {"model": "svm", "feature_set": "engineered", "test_accuracy": None},
+        {"model": "random_forest", "feature_set": "engineered", "test_accuracy": 0.99},
+        {"model": "rf", "feature_set": "raw", "test_accuracy": 0.999},
+        {"not": "a normal row"},
+    ]))
+    (tmp_path / "motion_metrics.json").write_text(json.dumps([{"model": "rf", "test_accuracy": 0.9}]))
+    monkeypatch.setattr("app.prediction.STATIC_METRICS_PATH", tmp_path / "metrics.json")
+    monkeypatch.setattr("app.prediction.MOTION_METRICS_PATH", tmp_path / "motion_metrics.json")
+    svc = PredictionService(FakeStatic(), FakeMotion())   # FakeStatic.feature_set == "engineered"
+    info = svc.models_info()
+    # 0.999 (raw) is excluded by the feature_set filter; None / bad row ignored
+    assert info["static"]["test_accuracy"] == 0.99
+    assert info["motion"]["test_accuracy"] == 0.9

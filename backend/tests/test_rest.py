@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 import pytest
@@ -40,6 +39,21 @@ def test_metrics(client):
     body = r.json()
     assert "static" in body and "motion" in body
     assert isinstance(body["static"], list) and isinstance(body["motion"], list)
+
+
+def test_models_sends_cors_header_for_allowed_origin(client):
+    r = client.get("/models", headers={"origin": "http://localhost:5173"})
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+
+def test_cors_origins_configurable_via_env(monkeypatch):
+    monkeypatch.setenv("SQUIDSPELL_CORS_ORIGINS", "https://example.test")
+    app = create_app(service=PredictionService(FakeStatic(), FakeMotion()))
+    with TestClient(app) as c:
+        r = c.get("/health", headers={"origin": "https://example.test"})
+        assert r.headers.get("access-control-allow-origin") == "https://example.test"
+        r2 = c.get("/health", headers={"origin": "http://localhost:5173"})
+        assert r2.headers.get("access-control-allow-origin") is None
 
 
 def test_create_app_without_service_is_lazy(monkeypatch):

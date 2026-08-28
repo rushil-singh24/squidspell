@@ -278,6 +278,11 @@ schema below:
 | `timestamp` | `int` | server epoch-ms (`int(time.time() * 1000)`) at send |
 | `client_timestamp` | `int \| null` | echo of the inbound `t` field, or `null` |
 
+`fps` is an integer count of frames received in the last 1.0 s (it reads `0`
+until at least 2 frames are in the window, so it is unreliable below ~2 fps),
+and malformed frames — which get an `{"error": ...}` reply instead of a
+prediction event — are not counted toward it.
+
 Why: Phase 5's corner readout needs per-frame confidence + motion-active state
 for visual feedback. The `static_label`/`static_confidence` are intermediate
 predictions (feed to the static smoother), while `prediction`/`confidence` are
@@ -338,10 +343,17 @@ must not use it to override server timing.
 Decided: If `ml/results/metrics.json` or `ml/results/motion_metrics.json` is
 absent (fresh clone before first training run, or in a Docker image without
 the training step), `GET /metrics` returns that key as `[]` plus two metadata
-fields: `"missing": ["metrics.json", "motion_metrics.json"]` and
-`"hint": "run `python ml/train_static.py` / `python ml/train_motion.py` to
-regenerate"`. The endpoint still returns 200 — no error state, just empty
-lists and guidance.
+fields: `missing` lists the absent filenames (e.g. `["metrics.json",
+"motion_metrics.json"]`), and `hint` is a string telling the caller to run the
+two training scripts to regenerate them:
+
+```
+run `python ml/train_static.py` / `python ml/train_motion.py` to regenerate
+```
+
+The endpoint still returns 200 — no error state, just empty
+lists and guidance. A corrupt or truncated JSON file degrades the same way as
+a missing one (the read is guarded against `OSError`/`ValueError`).
 Why: Metrics are optional; the backend can run without them (e.g., for live
 testing before the models are trained). Degrading gracefully with a hint helps
 users or CI/CD scripts self-service the missing step without being blocked.

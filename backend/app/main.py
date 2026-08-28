@@ -5,15 +5,21 @@ InferenceEngine over a WebSocket plus three REST endpoints. Internal modules
 """
 from __future__ import annotations
 
+import json
+import logging
+import math
+import os
 import time
 from collections import deque
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.prediction import PredictionService
 
 _FPS_WINDOW_SECONDS = 1.0
+_logger = logging.getLogger("squidspell.ws")
 
 
 def _valid_landmarks(value) -> bool:
@@ -24,7 +30,10 @@ def _valid_landmarks(value) -> bool:
     for pt in value:
         if not isinstance(pt, list) or len(pt) != 3:
             return False
-        if not all(isinstance(c, (int, float)) and not isinstance(c, bool) for c in pt):
+        if not all(
+            isinstance(c, (int, float)) and not isinstance(c, bool) and math.isfinite(c)
+            for c in pt
+        ):
             return False
     return True
 
@@ -43,6 +52,21 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
         yield
 
     app = FastAPI(title="SquidSpell Prediction Service", lifespan=lifespan)
+
+    _default_origins = "http://localhost:5173,http://127.0.0.1:5173"
+    _cors_origins = [
+        o.strip()
+        for o in os.environ.get("SQUIDSPELL_CORS_ORIGINS", _default_origins).split(",")
+        if o.strip()
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     app.state.service = service  # None unless a test injected one
 
     @app.get("/health")
@@ -51,10 +75,14 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
 
     @app.get("/models")
     def models():
+        if app.state.service is None:
+            raise HTTPException(status_code=503, detail="models not loaded")
         return app.state.service.models_info()
 
     @app.get("/metrics")
     def metrics():
+        if app.state.service is None:
+            raise HTTPException(status_code=503, detail="models not loaded")
         return app.state.service.metrics()
 
     @app.websocket("/ws/predict")
@@ -64,7 +92,23 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
         recv_times: deque[float] = deque()
         try:
             while True:
-                msg = await websocket.receive_json()
+                try:
+                    msg = await websocket.receive_json()
+                except (json.JSONDecodeError, KeyError):
+                    # non-JSON text frame, or a binary frame (receive_json
+                    # raises KeyError 'text' on binary)
+                    await websocket.send_json({
+                        "error": "expected a JSON text frame",
+                        "timestamp": int(time.time() * 1000),
+                    })
+                    continue
+                if not isinstance(msg, dict):
+                    await websocket.send_json({
+                        "error": "expected a JSON object",
+                        "timestamp": int(time.time() * 1000),
+                    })
+                    continue
+
                 raw = msg.get("landmarks")
                 client_ts = msg.get("t")
                 if not _valid_landmarks(raw):
@@ -94,6 +138,13 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
                     "client_timestamp": client_ts,
                 })
         except WebSocketDisconnect:
+            return
+        except Exception:
+            _logger.exception("unexpected error in /ws/predict; closing connection")
+            try:
+                await websocket.close(code=1011)
+            except Exception:
+                pass
             return
 
     return app

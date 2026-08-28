@@ -24,14 +24,30 @@ _METRICS_HINT = (
 
 def _read_json_list(path):
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
-    except FileNotFoundError:
+    except (OSError, ValueError):
+        # OSError: missing file / directory / permission.
+        # ValueError: json.JSONDecodeError (corrupt / truncated file).
         return None
 
 
-def _best_accuracy(rows):
-    accs = [r["test_accuracy"] for r in rows if isinstance(r, dict) and "test_accuracy" in r]
+def _best_accuracy(rows, feature_set=None):
+    """Best test_accuracy across the Phase 2 comparison rows. When feature_set
+    is given (static), restrict to rows at that representation so the number
+    reflects the family the exported model belongs to rather than a losing
+    candidate at a different feature set. This is the Phase 2 sweep's best
+    score at the shipped feature set, not a live per-request metric.
+    """
+    accs = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        if feature_set is not None and r.get("feature_set") != feature_set:
+            continue
+        v = r.get("test_accuracy")
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            accs.append(v)
     return max(accs) if accs else None
 
 
@@ -55,7 +71,7 @@ class PredictionService:
                 "algorithm": self._static.algorithm,
                 "feature_set": self._static.feature_set,
                 "classes": list(self._static.classes),
-                "test_accuracy": _best_accuracy(static_rows),
+                "test_accuracy": _best_accuracy(static_rows, feature_set=self._static.feature_set),
             },
             "motion": {
                 "algorithm": self._motion.algorithm,
