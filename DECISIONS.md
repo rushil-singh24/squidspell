@@ -249,3 +249,103 @@ WebSocket, so the backend's `prediction.py` can wrap `InferenceEngine` with no
 change to its input contract. Confirm and log formally in Phase 4.
 Affects: Phase 4 (`/ws/predict` payload), Phase 5 (browser webcam component
 must run MediaPipe and send landmarks, not frames).
+
+## [Phase 4] WebSocket payload — client-side landmark extraction
+Decided: Browser runs MediaPipe Hands and sends landmark frames to `/ws/predict`
+as `{"landmarks": [[x,y,z] ×21] | null, "t": <int>}`. The backend never imports
+or uses `cv2`/`mediapipe` — it receives pre-extracted landmarks only. This
+confirms the constraint pre-recorded in `[Phase 3]`.
+Why: Landmark extraction is expensive and must run in-browser (both for latency
+and for direct webcam access without sending video to the server). Reusing
+`InferenceEngine`'s landmark-based contract keeps the backend logic pure and
+unchanged from Phase 3.
+Affects: Phase 5's webcam component must run MediaPipe Hands in-browser and
+emit this exact schema; `backend/app/` imports nothing from `cv2`/`mediapipe`.
+
+## [Phase 4] Outbound prediction-event schema
+Decided: One message per received frame, emitted by `WS /ws/predict` with the
+schema below:
+
+| field | type | meaning |
+|---|---|---|
+| `prediction` | `str \| null` | `FrameResult.committed_letter` — the letter committed *this* frame, else `null` |
+| `confidence` | `number` | `FrameResult.committed_confidence` when `prediction` is set, else `0.0` |
+| `source` | `"static" \| "motion" \| null` | `FrameResult.committed_source` |
+| `static_label` | `str \| null` | `FrameResult.static_label` — raw per-frame static prediction, for the corner readout |
+| `static_confidence` | `number` | `FrameResult.static_confidence` |
+| `motion_active` | `bool` | `FrameResult.motion_active` — true while a J/Z gesture is mid-flight |
+| `fps` | `int` | server-measured receive rate over the last 1.0s (`0` until ≥2 frames in the window) |
+| `timestamp` | `int` | server epoch-ms (`int(time.time() * 1000)`) at send |
+| `client_timestamp` | `int \| null` | echo of the inbound `t` field, or `null` |
+
+Why: Phase 5's corner readout needs per-frame confidence + motion-active state
+for visual feedback. The `static_label`/`static_confidence` are intermediate
+predictions (feed to the static smoother), while `prediction`/`confidence` are
+final commits. `fps` indicates client send regularity without trusting the
+client's clock. One message per frame keeps the real-time contract tight and
+deterministic — no aggregation or batching.
+Affects: Phase 5 reads `static_label`/`static_confidence`/`motion_active`/`fps`
+for the corner readout and reacts to `prediction`/`source` for gesture commits.
+
+## [Phase 4] `sys.path` bridge, not repackaging
+Decided: `backend/app/_ml_bridge.py` appends `<repo>/ml` to `sys.path`
+(using `sys.path.append`, not `insert(0)`) and re-exports `load_static_model`,
+`load_motion_model`, `InferenceEngine`, `FrameResult`, and `RESULTS_DIR`. This
+avoids converting `ml/`'s bare sibling imports (e.g., `from features_static
+import ...`) and destabilising its `cd ml && pytest` workflow.
+Why: `ml/` has no `__init__.py` and cannot be imported as a package — a root
+`pyproject.toml` + `pip install -e .` would require rewriting all `ml/`'s
+imports, risking breakage. Appending (not prepending) to `sys.path` ensures that
+if `ml/tests/` is ever on the path, it won't shadow `backend/tests/` — the
+bridge is the single seam between the two, keeping each self-contained. The
+`[Phase 0] Python version and venv layout` DECISIONS entry sanctions this
+approach.
+Affects: Phase 9's `Dockerfile.backend` must `COPY` both `backend/` and `ml/`
+into the image so the relative `parents[2]/"ml"` path in the bridge resolves
+correctly. If `ml/` is ever repackaged, this bridge becomes dead code and should
+be deleted.
+
+## [Phase 4] One `InferenceEngine` per WebSocket connection; models loaded once per process
+Decided: `PredictionService` (one instance per process, built in the FastAPI
+lifespan) loads both classifiers once and holds them as stateless, shared
+predictor objects. Each incoming `/ws/predict` connection calls
+`service.new_engine()` to get a fresh `InferenceEngine`, ensuring each client's
+rolling buffer, smoother state, and motion gate are isolated. All connections
+in a process share the same model weights (read-only).
+Why: Models are large; loading them per-connection is wasteful. Per-connection
+engines are small (a deque + two stateless objects). The isolation prevents one
+client's gesture state from leaking to another and makes horizontal scaling
+straightforward — each process is self-contained.
+Affects: Horizontal scaling is fine; Phase 6/7's `transcript.py` / `race.py`
+will attach to the same per-connection engine (reusing its buffer and state).
+
+## [Phase 4] Server owns smoother/gate timing
+Decided: `InferenceEngine.process_frame(landmarks, now_ms)` is fed
+`now_ms = time.monotonic() * 1000.0`, measured server-side at frame receive
+time. The client's optional `t` field (inbound timestamp) is echoed back as
+`client_timestamp` only — never used for smoother stability windows or motion
+gate timing. This makes prediction output independent of client clock skew,
+jitter, or out-of-order delivery.
+Why: Clients may have poor clocks, variable network latency, or retry-send
+frames. Server time is authoritative and stable. The echo of `client_timestamp`
+still allows Phase 5 to detect stale frames or out-of-order delivery if needed,
+but stability decisions are server-local.
+Affects: Prediction stability is decoupled from client-side factors like WiFi
+jitter. Phase 5's UI can use `client_timestamp` for debugging or metrics, but
+must not use it to override server timing.
+
+## [Phase 4] `GET /metrics` degradation when files missing
+Decided: If `ml/results/metrics.json` or `ml/results/motion_metrics.json` is
+absent (fresh clone before first training run, or in a Docker image without
+the training step), `GET /metrics` returns that key as `[]` plus two metadata
+fields: `"missing": ["metrics.json", "motion_metrics.json"]` and
+`"hint": "run `python ml/train_static.py` / `python ml/train_motion.py` to
+regenerate"`. The endpoint still returns 200 — no error state, just empty
+lists and guidance.
+Why: Metrics are optional; the backend can run without them (e.g., for live
+testing before the models are trained). Degrading gracefully with a hint helps
+users or CI/CD scripts self-service the missing step without being blocked.
+Affects: Phase 10's CI must run the training scripts (or ship pre-trained
+`.pkl` files and JSON metrics) for full `/metrics` output. Phase 9's
+`Dockerfile.backend` must either run the training commands or use a volume
+mount to supply the regenerated JSON files.

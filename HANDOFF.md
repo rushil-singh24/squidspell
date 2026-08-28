@@ -1,12 +1,13 @@
 # SquidSpell — Handoff
 
-**Last updated:** Phase 3 code + unit tests complete and committed (2026-08-28). `ml/model_loader.py`
-(`StaticPredictor`, `MotionPredictor`, model loading with `feature_set` branching, 20-frame motion
-resample), `ml/inference.py` (`StaticSmoother`, `MotionGate`, `InferenceEngine`, `FrameResult`),
-and `ml/live_demo.py` (webcam → MediaPipe → OpenCV display loop) all added; full test suite 85
-passing. **Live webcam verification still pending** — the human must run `python ml/live_demo.py`
-and confirm all 26 letters incl. J/Z per the Phase 3 acceptance criteria before Phase 3 is truly
-done.
+**Last updated:** Phase 4 code + documentation complete and committed (2026-08-28). `backend/app/`
+(`_ml_bridge.py`, `prediction.py`, `main.py`) serves `/health`, `/models`, `/metrics`, and
+`WS /ws/predict`; backend test suite green (`cd backend && python -m pytest tests/ -q`, 19 passing).
+ML suite unchanged at 91 passing (Phase 4 Task 1 added 2 predictor-accessor tests). Run locally:
+`cd backend && uvicorn app.main:app --reload` (http://127.0.0.1:8000/docs for OpenAPI UI).
+One `ml/` change this phase: `StaticPredictor.algorithm`, `.feature_set` and `MotionPredictor.algorithm`
+read-only properties. **Live webcam verification for Phase 3 still pending** — the human must run
+`python ml/live_demo.py` and confirm all 26 letters incl. J/Z before Phase 3 formally closes.
 
 **Resume from cold (fresh clone or new machine):**
 ```bash
@@ -72,15 +73,23 @@ which is scale-normalized) — see `DECISIONS.md`'s `[Phase 2]` entry for the ex
 **Status as of 2026-08-28 (Phase 3): Standalone inference loop is code-complete and unit-tested.**
 `ml/model_loader.py` (model loading + `feature_set` dispatch + 20-frame motion resample),
 `ml/inference.py` (pure, hardware-free pipeline components), and `ml/live_demo.py` (webcam
-integration) are all committed; the full test suite runs and passes (85 tests). **Live webcam
+integration) are all committed; the full test suite runs and passes (91 tests). **Live webcam
 verification is the final gate for Phase 3** — the human must run `python ml/live_demo.py` and
 confirm all 26 letters including J/Z perform stably and correctly before Phase 3 formally closes.
 This is the only remaining Phase 3 task; no code changes anticipated from the live pass.
 
-**Phase 4 (FastAPI + WebSocket) is next** — it reuses `ml/model_loader.py` + `InferenceEngine`
-(after the Phase 0 editable-install / sys.path step) logic unchanged; only the frame source
-(WebSocket vs. webcam) and output format differ. See `DECISIONS.md`'s `[Phase 3]` entries for
-the exact pipeline structure and tuning constants.
+**Status as of 2026-08-28 (Phase 4): FastAPI backend + WebSocket are code-complete, documented, and tested.**
+`backend/app/_ml_bridge.py` (sys.path seam to `ml/`), `backend/app/prediction.py` (`PredictionService`),
+and `backend/app/main.py` (`create_app`, REST endpoints, `/ws/predict`) all committed and fully
+unit-tested (19 tests). Reuses `ml/model_loader.py` + `InferenceEngine` logic unchanged; only the
+frame source (WebSocket vs. webcam) and output format differ. See `DECISIONS.md`'s `[Phase 4]`
+entries for the payload schema, sys.path bridge rationale, per-connection engine isolation, and
+metrics degradation.
+
+**Phase 5 (Frontend Shared Shell, Theme & Animation Foundation) is next.** Phase 5's webcam component
+must run MediaPipe Hands in-browser and emit the `/ws/predict` schema logged in `DECISIONS.md
+[Phase 4]` (`{"landmarks": [[x,y,z] ×21] | null, "t": <int>}`). The backend is ready to receive
+these frames immediately.
 
 **Known minor follow-ups (non-blocking, deferred from Phase 0's reviews):**
 - Unused Vite-scaffold demo assets (`frontend/src/assets/hero.png`,
@@ -113,8 +122,8 @@ per phase so neither is a surprise mid-build.
 - **Phase 3 — Standalone inference loop:** code is complete (unit-tested, committed). Needs the human at the webcam
   to run `python ml/live_demo.py` and verify predictions are correct in real time across all 26 letters
   including J/Z (an agent can write the loop but can't judge "did it read my E correctly").
-- **Phase 4 — Backend/WebSocket:** automatable — a test script can simulate
-  landmark frames without a live human.
+- **Phase 4 — Backend/WebSocket:** done — backend is script-testable with deterministic
+  fake-landmark frames; no human needed. All endpoints tested and serving.
 - **Phase 5 — Frontend shell/theme:** mostly automatable; browser webcam
   permission prompts need a human click once per browser profile, and
   visual/animation polish benefits from a human actually looking at it.
@@ -139,6 +148,7 @@ per phase so neither is a surprise mid-build.
   demo of a human signing.
 
 **Phase 2 is complete as of 2026-08-19** — static and motion classifiers are trained and
-exported (see the status section above for the winning models/accuracy). **Phase 3 is
-unblocked** — it can proceed against `ml/models/static_model.pkl` and `ml/models/motion_model.pkl`
-as soon as a human is available at the webcam to verify live predictions.
+exported. **Phase 3 code is complete as of 2026-08-28** — awaits human live-webcam verification.
+**Phase 4 is complete as of 2026-08-28** — backend serves all endpoints and WebSocket schema; ready
+for Phase 5 frontend integration. **Phase 5 (Frontend Shared Shell) is unblocked** and can proceed
+immediately; it must implement MediaPipe Hands in-browser and connect to the `/ws/predict` endpoint.
