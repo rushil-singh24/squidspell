@@ -44,11 +44,10 @@ def test_new_letter_can_commit_after_change():
 
 def test_none_label_breaks_stability():
     sm = StaticSmoother(window=3, stable_ms=100)
-    sm.update("A", 0)
-    # hand disappears: window fills with None -> majority is None -> no commit
-    sm.update(None, 50)
-    sm.update(None, 100)
-    sm.update(None, 150)
+    assert sm.update("A", 0) is None
+    assert sm.update(None, 50) is None
+    assert sm.update(None, 100) is None
+    assert sm.update(None, 150) is None
     assert sm.update(None, 500) is None
 
 
@@ -118,23 +117,23 @@ def test_centroid_is_mean_of_points():
 
 def test_gate_stays_idle_when_hand_barely_moves():
     gate = MotionGate(_ScriptedStatic("I", 0.9), _ScriptedMotion("J", 0.9))
-    committed, clear = gate.update(_still_buffer(10), hand_present=True, now_ms=0)
-    assert (committed, clear) == (None, False)
+    committed, conf, clear = gate.update(_still_buffer(10), hand_present=True, now_ms=0)
+    assert (committed, conf, clear) == (None, 0.0, False)
     assert gate.active is False
 
 
 def test_gate_arms_on_movement_plus_matching_start_pose():
     gate = MotionGate(_ScriptedStatic("I", 0.9), _ScriptedMotion("J", 0.9))
-    committed, clear = gate.update(_moving_buffer(10), hand_present=True, now_ms=0)
-    assert (committed, clear) == (None, False)
+    committed, conf, clear = gate.update(_moving_buffer(10), hand_present=True, now_ms=0)
+    assert (committed, conf, clear) == (None, 0.0, False)
     assert gate.active is True
 
 
 def test_gate_does_not_arm_when_start_pose_unmatched():
     gate = MotionGate(_ScriptedStatic("B", 0.99), _ScriptedMotion("J", 0.9))
-    committed, clear = gate.update(_moving_buffer(10), hand_present=True, now_ms=0)
+    committed, conf, clear = gate.update(_moving_buffer(10), hand_present=True, now_ms=0)
     assert gate.active is False
-    assert (committed, clear) == (None, False)
+    assert (committed, conf, clear) == (None, 0.0, False)
 
 
 def test_gate_does_not_arm_when_start_pose_confidence_low():
@@ -149,8 +148,9 @@ def test_gate_commits_j_when_motion_stops():
     gate.update(_moving_buffer(10), hand_present=True, now_ms=0)          # arm
     # hand now still for >= min_segment_frames more frames -> classify
     buf = _moving_buffer(10) + _still_buffer(6, cx=0.8, cy=0.5)
-    committed, clear = gate.update(buf, hand_present=True, now_ms=100)
+    committed, conf, clear = gate.update(buf, hand_present=True, now_ms=100)
     assert committed == "J"
+    assert conf == pytest.approx(0.95)
     assert clear is True
     assert gate.active is False
     assert motion.calls == 1
@@ -160,7 +160,7 @@ def test_gate_discards_on_negative_class():
     gate = MotionGate(_ScriptedStatic("I", 0.9), _ScriptedMotion("negative", 0.9))
     gate.update(_moving_buffer(10), hand_present=True, now_ms=0)
     buf = _moving_buffer(10) + _still_buffer(6, cx=0.8, cy=0.5)
-    committed, clear = gate.update(buf, hand_present=True, now_ms=100)
+    committed, conf, clear = gate.update(buf, hand_present=True, now_ms=100)
     assert committed is None
     assert clear is True
     assert gate.active is False
@@ -170,8 +170,8 @@ def test_gate_discards_on_low_confidence_jz():
     gate = MotionGate(_ScriptedStatic("I", 0.9), _ScriptedMotion("J", 0.4))
     gate.update(_moving_buffer(10), hand_present=True, now_ms=0)
     buf = _moving_buffer(10) + _still_buffer(6, cx=0.8, cy=0.5)
-    committed, clear = gate.update(buf, hand_present=True, now_ms=100)
-    assert (committed, clear) == (None, True)
+    committed, conf, clear = gate.update(buf, hand_present=True, now_ms=100)
+    assert (committed, conf, clear) == (None, 0.0, True)
 
 
 def test_gate_forces_classification_when_buffer_full():
@@ -179,7 +179,7 @@ def test_gate_forces_classification_when_buffer_full():
     gate = MotionGate(_ScriptedStatic("D", 0.9), motion)
     gate.update(_moving_buffer(10), hand_present=True, now_ms=0)          # arm (D -> Z)
     full = _moving_buffer(MOTION_BUFFER_LEN)   # still "moving", never stops
-    committed, clear = gate.update(full, hand_present=True, now_ms=200)
+    committed, conf, clear = gate.update(full, hand_present=True, now_ms=200)
     assert committed == "Z"
     assert clear is True
 
@@ -189,7 +189,7 @@ def test_gate_classifies_when_hand_disappears_while_armed():
     gate = MotionGate(_ScriptedStatic("I", 0.9), motion)
     gate.update(_moving_buffer(10), hand_present=True, now_ms=0)
     buf = _moving_buffer(10) + _still_buffer(6, cx=0.8, cy=0.5)
-    committed, clear = gate.update(buf, hand_present=False, now_ms=100)
+    committed, conf, clear = gate.update(buf, hand_present=False, now_ms=100)
     assert committed == "J"
 
 
@@ -268,3 +268,39 @@ def test_engine_reset():
     eng.process_frame(_hand_at(0.5, 0.5), now_ms=0)
     eng.reset()
     assert len(eng._buffer) == 0
+
+
+def test_none_frame_never_commits_but_clock_survives_brief_dropout():
+    sm = StaticSmoother(window=5, stable_ms=100)
+    assert sm.update("A", 0) is None
+    assert sm.update(None, 60) is None       # brief dropout: no commit
+    assert sm.update(None, 120) is None      # still no commit, even past stable_ms
+    assert sm.update("A", 140) == "A"        # lands on the next real-hand frame
+
+
+def test_gate_abandons_when_hand_gone_for_consecutive_frames():
+    gate = MotionGate(_ScriptedStatic("I", 0.9), _ScriptedMotion("J", 0.9))
+    gate.update(_moving_buffer(10), hand_present=True, now_ms=0)   # arm
+    assert gate.active is True
+    frozen = _moving_buffer(10)   # engine does not grow the buffer on no-hand frames
+    last = None
+    for k in range(1, 4):         # 3 consecutive no-hand frames
+        last = gate.update(frozen, hand_present=False, now_ms=k * 30)
+    assert gate.active is False
+    assert last == (None, 0.0, True)
+
+
+def test_engine_recovers_after_hand_disappears_mid_gesture():
+    eng = InferenceEngine(_ScriptedStatic("I", 0.9), _ScriptedMotion("negative", 0.2))
+    for k in range(8):
+        eng.process_frame(_hand_at(0.2 + 0.03 * k, 0.5), now_ms=k * 30)   # arm via movement
+    assert eng._gate.active is True
+    for k in range(8, 14):
+        eng.process_frame(None, now_ms=k * 30)                            # hand gone
+    assert eng._gate.active is False
+    assert len(eng._buffer) == 0
+    committed = [
+        eng.process_frame(_hand_at(0.5, 0.5), now_ms=k * 30).committed_letter
+        for k in range(14, 44)
+    ]
+    assert "I" in committed        # static path is un-wedged again

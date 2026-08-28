@@ -63,6 +63,23 @@ def test_motion_predictor_resamples_then_uses_49_features():
     assert fake.last_n_features == 49
 
 
+def test_motion_predictor_always_resamples_to_20(monkeypatch):
+    captured = []
+
+    def spy(frames):
+        captured.append(len(frames))
+        return [0.0] * 49
+
+    monkeypatch.setattr("model_loader.extract_motion_features", spy)
+    fake = _FakeSklearnModel(["J", "Z", "negative"])
+    pred = MotionPredictor(model=fake, classes=["J", "Z", "negative"])
+    short = [[(0.01 * i, 0.0, 0.0) for i in range(21)] for _ in range(7)]
+    long = [[(0.01 * i + 0.001 * t, 0.0, 0.0) for i in range(21)] for t in range(40)]
+    pred.predict(short)
+    pred.predict(long)
+    assert captured == [20, 20]
+
+
 def test_motion_resample_len_constant():
     assert MOTION_RESAMPLE_LEN == 20
 

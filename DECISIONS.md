@@ -202,6 +202,11 @@ defaults for the live pass, NOT yet validated at a webcam:
   is considered finished → classify.
 - `MOTION_MIN_SEGMENT_FRAMES = 5`, `MOTION_MIN_CONFIDENCE = 0.6`,
   `MOTION_START_POSE_CONFIDENCE = 0.5`.
+- `MOTION_NO_HAND_ABORT = 3` — while the gate is armed, this many consecutive
+  no-hand frames abandons the in-progress gesture (disarm + clear the buffer)
+  rather than letting the gate stay wedged until the deque happens to fill.
+  Added by the Phase 3 final-review fix wave (a hand that left frame mid-gesture
+  previously froze the gate armed, which also suppressed the static path).
 - `MOTION_START_POSES = {"I": "J", "D": "Z"}` — the gate only arms if the
   buffer's first frame is classified by the *static* model as `I` (→ gates J)
   or `D` (→ gates Z) above `MOTION_START_POSE_CONFIDENCE`, AND centroid
@@ -210,7 +215,18 @@ defaults for the live pass, NOT yet validated at a webcam:
   essentially `D` / index-point; the static model never saw J/Z so this reuses
   what it *did* learn. This is a heuristic precondition, not a hard
   requirement — the motion model's `negative` class is still the primary
-  false-trigger defense (see `[Phase 2]`).
+  false-trigger defense (see `[Phase 2]`). The gate arms on the `I`/`D` start
+  pose but does **not** require the motion model's output letter to match that
+  pose — `negative`-class recall + `MOTION_MIN_CONFIDENCE` are the sole
+  false-trigger filters. (The plan's Task 3 sketch mentioned recording an
+  `_armed_letter = start_poses[label]` for a cross-check; that was intentionally
+  dropped and never implemented, consistent with the `[Phase 2]` policy.)
+- `FrameResult` carries `committed_confidence: float` alongside
+  `committed_letter` / `committed_source`: on a motion commit it is the motion
+  model's confidence for the J/Z (previously discarded — the engine hard-coded
+  `static_confidence=0.0` on that path), on a static commit it is the smoothed
+  letter's per-frame confidence, and `0.0` when nothing committed. Phase 4's
+  WebSocket payload needs this.
 Why: The spec deliberately left all of these open ("~20 frames", "~500ms", "a
 movement threshold"). Keeping them as one clearly-labeled constant block makes
 the live tuning pass a single-file edit. The `I`/`D` start-pose map is the one
@@ -219,7 +235,10 @@ Affects: The live-webcam verification pass (deferred) will adjust these —
 expect `MOTION_MOVEMENT_THRESHOLD` and `MOTION_STOP_VELOCITY` to need the most
 tuning since they depend on camera framerate and how close the signer sits.
 Phase 4 reuses `ml/model_loader.py` and the `InferenceEngine` logic unchanged;
-only the frame *source* (WebSocket vs. webcam) differs.
+only the frame *source* (WebSocket vs. webcam) differs. That reuse from
+`backend/` first requires the root `pyproject.toml` / editable-install (or
+`sys.path`) step already called out in `[Phase 0] Python version and venv
+layout` — `ml/` has no `__init__.py` and uses bare sibling imports.
 
 ## [Phase 3] WebSocket payload direction (recorded early for Phase 4)
 Decided: Deferred to Phase 4, but noting the constraint now: `live_demo.py`

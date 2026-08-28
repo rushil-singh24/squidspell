@@ -109,10 +109,12 @@ python train_motion.py     # writes models/motion_model.pkl
 python live_demo.py        # press ESC to quit
 ```
 
-A window opens on your webcam feed. The top-left readout shows the current
-smoothed static letter + confidence, or `MOTION…` while a J/Z gesture is in
-progress. Committed letters append along the bottom and print to the console
-with their source (`static` / `motion`).
+A window opens on your webcam feed. The top-left readout shows the **raw
+per-frame** static letter + confidence (it is expected to flicker frame to
+frame — nothing there is smoothed), or `MOTION…` while a J/Z gesture is in
+progress. The **committed** letters along the bottom row (and printed to the
+console with their source, `static` / `motion`) are the smoothed/stabilised
+stream — those are the ones that count.
 
 **What "passing" looks like:** you can sign any of the 26 letters, including
 J and Z, and see stable, correct predictions — static letters settle after a

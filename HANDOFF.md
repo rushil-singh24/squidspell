@@ -70,16 +70,17 @@ which is scale-normalized) — see `DECISIONS.md`'s `[Phase 2]` entry for the ex
 3/4 need if either issue surfaces in live testing.
 
 **Status as of 2026-08-28 (Phase 3): Standalone inference loop is code-complete and unit-tested.**
-`ml/model_loader.py` (model loading + `feature_set` dispatch + 20-frame motion resample), 
-`ml/inference.py` (pure, hardware-free pipeline components), and `ml/live_demo.py` (webcam 
-integration) are all committed; the full test suite runs and passes (85 tests). **Live webcam 
-verification is the final gate for Phase 3** — the human must run `python ml/live_demo.py` and 
-confirm all 26 letters including J/Z perform stably and correctly before Phase 3 formally closes. 
+`ml/model_loader.py` (model loading + `feature_set` dispatch + 20-frame motion resample),
+`ml/inference.py` (pure, hardware-free pipeline components), and `ml/live_demo.py` (webcam
+integration) are all committed; the full test suite runs and passes (85 tests). **Live webcam
+verification is the final gate for Phase 3** — the human must run `python ml/live_demo.py` and
+confirm all 26 letters including J/Z perform stably and correctly before Phase 3 formally closes.
 This is the only remaining Phase 3 task; no code changes anticipated from the live pass.
 
-**Phase 4 (FastAPI + WebSocket) is next** — it reuses `ml/model_loader.py` and the `InferenceEngine` 
-logic unchanged; only the frame source (WebSocket vs. webcam) and output format differ. See 
-`DECISIONS.md`'s `[Phase 3]` entries for the exact pipeline structure and tuning constants.
+**Phase 4 (FastAPI + WebSocket) is next** — it reuses `ml/model_loader.py` + `InferenceEngine`
+(after the Phase 0 editable-install / sys.path step) logic unchanged; only the frame source
+(WebSocket vs. webcam) and output format differ. See `DECISIONS.md`'s `[Phase 3]` entries for
+the exact pipeline structure and tuning constants.
 
 **Known minor follow-ups (non-blocking, deferred from Phase 0's reviews):**
 - Unused Vite-scaffold demo assets (`frontend/src/assets/hero.png`,
@@ -110,7 +111,7 @@ per phase so neither is a surprise mid-build.
 - **Phase 2 — Training:** fully automatable once Phase 1's data exists (no
   human needed beyond reviewing the results tables).
 - **Phase 3 — Standalone inference loop:** code is complete (unit-tested, committed). Needs the human at the webcam
-  to run `python ml/live_demo.py` and verify predictions are correct in real time across all 26 letters 
+  to run `python ml/live_demo.py` and verify predictions are correct in real time across all 26 letters
   including J/Z (an agent can write the loop but can't judge "did it read my E correctly").
 - **Phase 4 — Backend/WebSocket:** automatable — a test script can simulate
   landmark frames without a live human.

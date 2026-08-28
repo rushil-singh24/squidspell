@@ -78,7 +78,8 @@ def _run_interactive(args):
 
             if result.committed_letter:
                 committed.append(result.committed_letter)
-                print(f"  committed: {result.committed_letter}  ({result.committed_source})")
+                print(f"  committed: {result.committed_letter}  "
+                      f"({result.committed_source}, {result.committed_confidence:.2f})")
 
             label = result.static_label or "-"
             conf = result.static_confidence

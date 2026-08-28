@@ -44,6 +44,11 @@ class StaticSmoother:
             self._since_ms = now_ms
             self._committed = False
             return None
+        if label is None:
+            # Hand not visible this frame: keep the stability clock running so a
+            # 1-2 frame dropout doesn't reset a held letter, but never *commit*
+            # a letter on a frame where the hand isn't there.
+            return None
         if (
             majority is not None
             and not self._committed
@@ -68,6 +73,7 @@ MOTION_MIN_SEGMENT_FRAMES = 5     # frames of motion required before a stop can 
 MOTION_MIN_CONFIDENCE = 0.6       # min motion-model confidence to commit a J/Z
 MOTION_START_POSE_CONFIDENCE = 0.5  # min static confidence for the start-pose precondition
 MOTION_START_POSES = {"I": "J", "D": "Z"}  # static label -> motion letter it gates
+MOTION_NO_HAND_ABORT = 3  # consecutive no-hand frames while armed -> abandon the gesture
 
 
 def centroid(frame):
@@ -105,6 +111,7 @@ class MotionGate:
         start_pose_confidence=MOTION_START_POSE_CONFIDENCE,
         start_poses=None,
         buffer_len=MOTION_BUFFER_LEN,
+        no_hand_abort=MOTION_NO_HAND_ABORT,
     ):
         self._static = static_predictor
         self._motion = motion_predictor
@@ -115,8 +122,10 @@ class MotionGate:
         self._start_pose_confidence = start_pose_confidence
         self._start_poses = dict(MOTION_START_POSES if start_poses is None else start_poses)
         self._buffer_len = buffer_len
+        self._no_hand_abort = no_hand_abort
         self._armed = False
         self._armed_at_len = 0
+        self._no_hand_streak = 0
 
     @property
     def active(self):
@@ -133,7 +142,17 @@ class MotionGate:
                 if label in self._start_poses and conf >= self._start_pose_confidence:
                     self._armed = True
                     self._armed_at_len = len(buffer)
-            return (None, False)
+            return (None, 0.0, False)
+
+        if hand_present:
+            self._no_hand_streak = 0
+        else:
+            self._no_hand_streak += 1
+            if self._no_hand_streak >= self._no_hand_abort:
+                self._armed = False
+                self._armed_at_len = 0
+                self._no_hand_streak = 0
+                return (None, 0.0, True)   # discard + clear
 
         stopped = (not hand_present) or (_velocity(buffer) < self._stop_velocity)
         window_full = len(buffer) >= self._buffer_len
@@ -142,14 +161,16 @@ class MotionGate:
             label, conf = self._motion.predict(buffer)
             self._armed = False
             self._armed_at_len = 0
+            self._no_hand_streak = 0
             if label in ("J", "Z") and conf >= self._min_confidence:
-                return (label, True)
-            return (None, True)
-        return (None, False)
+                return (label, conf, True)
+            return (None, 0.0, True)
+        return (None, 0.0, False)
 
     def reset(self):
         self._armed = False
         self._armed_at_len = 0
+        self._no_hand_streak = 0
 
 
 @dataclass
@@ -158,6 +179,7 @@ class FrameResult:
     static_confidence: float
     motion_active: bool
     committed_letter: str | None
+    committed_confidence: float
     committed_source: str | None
 
 
@@ -185,13 +207,17 @@ class InferenceEngine:
             if gate is not None
             else MotionGate(static_predictor, motion_predictor, buffer_len=buffer_len)
         )
+        # The gate's window_full trigger must track the real rolling-buffer
+        # capacity (this deque's maxlen), or `len(buffer) - _armed_at_len` can
+        # silently freeze once the deque saturates. See DECISIONS.md [Phase 3].
+        self._gate._buffer_len = buffer_len
 
     def process_frame(self, landmarks, now_ms):
         hand_present = landmarks is not None
         if hand_present:
             self._buffer.append(landmarks)
 
-        committed_motion, should_clear = self._gate.update(
+        committed_motion, committed_motion_conf, should_clear = self._gate.update(
             list(self._buffer), hand_present, now_ms
         )
         if should_clear:
@@ -204,6 +230,7 @@ class InferenceEngine:
                 static_confidence=0.0,
                 motion_active=self._gate.active,
                 committed_letter=committed_motion,
+                committed_confidence=committed_motion_conf,
                 committed_source="motion",
             )
 
@@ -222,6 +249,7 @@ class InferenceEngine:
             static_confidence=static_conf,
             motion_active=self._gate.active,
             committed_letter=committed_static,
+            committed_confidence=static_conf if committed_static else 0.0,
             committed_source="static" if committed_static else None,
         )
 
