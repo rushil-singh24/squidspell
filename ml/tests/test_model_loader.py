@@ -99,3 +99,16 @@ def test_load_motion_model_predicts_valid_class():
     label, conf = pred.predict(raw)
     assert label in pred.classes
     assert 0.0 <= conf <= 1.0
+
+
+def test_static_predictor_exposes_algorithm_and_feature_set():
+    fake = _FakeSklearnModel(["A", "B"])
+    pred = StaticPredictor(model=fake, feature_set="engineered", classes=["A", "B"])
+    assert pred.algorithm == "_FakeSklearnModel"
+    assert pred.feature_set == "engineered"
+
+
+def test_motion_predictor_exposes_algorithm():
+    fake = _FakeSklearnModel(["J", "Z", "negative"])
+    pred = MotionPredictor(model=fake, classes=["J", "Z", "negative"])
+    assert pred.algorithm == "_FakeSklearnModel"

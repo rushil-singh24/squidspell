@@ -37,6 +37,14 @@ class StaticPredictor:
         self._feature_set = feature_set
         self.classes = list(classes)
 
+    @property
+    def algorithm(self):
+        return type(self._model).__name__
+
+    @property
+    def feature_set(self):
+        return self._feature_set
+
     def predict(self, landmarks):
         if self._feature_set == "engineered":
             row = extract_static_features(landmarks)
@@ -55,6 +63,10 @@ class MotionPredictor:
     def __init__(self, model, classes):
         self._model = model
         self.classes = list(classes)
+
+    @property
+    def algorithm(self):
+        return type(self._model).__name__
 
     def predict(self, frames):
         if len(frames) < 2:
