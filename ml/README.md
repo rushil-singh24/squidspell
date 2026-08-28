@@ -87,3 +87,42 @@ Everything Phase 2 needs to know about the file formats, in one place:
   `DECISIONS.md`), `filepath` (relative to the manifest's own directory, e.g. `J_003.csv`),
   `num_raw_frames` (the actual raw captured-frame count before resampling — not the fixed
   resampled length), and `captured_at` (Unix timestamp).
+
+## Phase 3 — live demo (you, at a real webcam)
+
+`live_demo.py` runs the full pipeline — webcam → MediaPipe → static + motion
+classifiers → merged, smoothed predictions → an OpenCV window — with no
+backend or frontend. It's the Phase 3 acceptance gate.
+
+**Prerequisites** (all gitignored / regenerable — a fresh clone has none):
+
+```bash
+cd ~/squidspell && source .venv/bin/activate && cd ml
+python train_static.py     # writes models/static_model.pkl
+python train_motion.py     # writes models/motion_model.pkl
+# models/hand_landmarker.task must also be present (see DECISIONS.md [Phase 1])
+```
+
+**Run it:**
+
+```bash
+python live_demo.py        # press ESC to quit
+```
+
+A window opens on your webcam feed. The top-left readout shows the current
+smoothed static letter + confidence, or `MOTION…` while a J/Z gesture is in
+progress. Committed letters append along the bottom and print to the console
+with their source (`static` / `motion`).
+
+**What "passing" looks like:** you can sign any of the 26 letters, including
+J and Z, and see stable, correct predictions — static letters settle after a
+brief hold, J/Z commit once as a single event at the end of the motion, and
+ordinary hand movement between letters does *not* trigger a spurious J/Z. If
+J/Z false-trigger, the fix is more `negative` motion takes + retrain
+(`collect_motion.py --letter negative`), not editing thresholds in the loop
+(see `DECISIONS.md` `[Phase 2]`).
+
+The tuning constants (vote window, stability ms, movement / stop-velocity
+thresholds, the `I`→J / `D`→Z start-pose map) live at the top of
+`ml/inference.py` — see `DECISIONS.md` `[Phase 3]` for their rationale and
+what to adjust first.

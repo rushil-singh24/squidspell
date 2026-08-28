@@ -1,11 +1,12 @@
 # SquidSpell — Handoff
 
-**Last updated:** Phase 2 fully complete — static and motion classifiers trained on the real
-Phase 1 dataset and exported (2026-08-19). Winning static model: **random forest on engineered
-features**, test accuracy 0.994. Winning motion model: **random forest**, test accuracy 0.893,
-negative-class (anti-false-trigger) recall 0.778. See `DECISIONS.md`'s "[Phase 2] Real training
-run results and winning models" entry for the full comparison numbers and the exact
-`static_model.pkl`/`motion_model.pkl` bundle shapes Phase 3/4 need to load.
+**Last updated:** Phase 3 code + unit tests complete and committed (2026-08-28). `ml/model_loader.py`
+(`StaticPredictor`, `MotionPredictor`, model loading with `feature_set` branching, 20-frame motion
+resample), `ml/inference.py` (`StaticSmoother`, `MotionGate`, `InferenceEngine`, `FrameResult`),
+and `ml/live_demo.py` (webcam → MediaPipe → OpenCV display loop) all added; full test suite 85
+passing. **Live webcam verification still pending** — the human must run `python ml/live_demo.py`
+and confirm all 26 letters incl. J/Z per the Phase 3 acceptance criteria before Phase 3 is truly
+done.
 
 **Resume from cold (fresh clone or new machine):**
 ```bash
@@ -68,13 +69,17 @@ takes) and are not camera-distance invariant (unlike the reused static-handshape
 which is scale-normalized) — see `DECISIONS.md`'s `[Phase 2]` entry for the exact remedies Phase
 3/4 need if either issue surfaces in live testing.
 
-**Before starting Phase 3, read:**
-- `DECISIONS.md` in full — the `[Phase 1]` entry documents the data-collection constants, and
-  the `[Phase 2]` entry documents the winning models and the exact bundle keys
-  (`static_model.pkl`'s `feature_set` key in particular) Phase 3 must branch on before calling
-  `.predict()`.
-- `ml/README.md` for where the data actually lives.
-- The Phase 3 section of the full-phases spec doc.
+**Status as of 2026-08-28 (Phase 3): Standalone inference loop is code-complete and unit-tested.**
+`ml/model_loader.py` (model loading + `feature_set` dispatch + 20-frame motion resample), 
+`ml/inference.py` (pure, hardware-free pipeline components), and `ml/live_demo.py` (webcam 
+integration) are all committed; the full test suite runs and passes (85 tests). **Live webcam 
+verification is the final gate for Phase 3** — the human must run `python ml/live_demo.py` and 
+confirm all 26 letters including J/Z perform stably and correctly before Phase 3 formally closes. 
+This is the only remaining Phase 3 task; no code changes anticipated from the live pass.
+
+**Phase 4 (FastAPI + WebSocket) is next** — it reuses `ml/model_loader.py` and the `InferenceEngine` 
+logic unchanged; only the frame source (WebSocket vs. webcam) and output format differ. See 
+`DECISIONS.md`'s `[Phase 3]` entries for the exact pipeline structure and tuning constants.
 
 **Known minor follow-ups (non-blocking, deferred from Phase 0's reviews):**
 - Unused Vite-scaffold demo assets (`frontend/src/assets/hero.png`,
@@ -104,9 +109,9 @@ per phase so neither is a surprise mid-build.
   hands-on phase in the whole project.
 - **Phase 2 — Training:** fully automatable once Phase 1's data exists (no
   human needed beyond reviewing the results tables).
-- **Phase 3 — Standalone inference loop:** needs the human at the webcam
-  again to verify predictions are correct in real time (an agent can write
-  the loop but can't judge "did it read my E correctly").
+- **Phase 3 — Standalone inference loop:** code is complete (unit-tested, committed). Needs the human at the webcam
+  to run `python ml/live_demo.py` and verify predictions are correct in real time across all 26 letters 
+  including J/Z (an agent can write the loop but can't judge "did it read my E correctly").
 - **Phase 4 — Backend/WebSocket:** automatable — a test script can simulate
   landmark frames without a live human.
 - **Phase 5 — Frontend shell/theme:** mostly automatable; browser webcam
