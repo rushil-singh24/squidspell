@@ -8,6 +8,7 @@ class FakeWS {
   static last: FakeWS | null = null
   url: string
   readyState = 0
+  bufferedAmount = 0
   onopen: (() => void) | null = null
   onclose: ((e: { code: number }) => void) | null = null
   onmessage: ((e: { data: string }) => void) | null = null
@@ -78,6 +79,28 @@ describe('usePrediction', () => {
     act(() => result.current.sendLandmarks([[1, 2, 3]]))
     expect(FakeWS.last!.sent).toHaveLength(1)
     expect(JSON.parse(FakeWS.last!.sent[0]).landmarks).toEqual([[1, 2, 3]])
+  })
+
+  it('fires onCommit synchronously for commit events and stops after unsubscribe', () => {
+    const { result } = renderHook(() => usePrediction('ws://test'))
+    act(() => FakeWS.last!._open())
+
+    const spy = vi.fn()
+    let unsub: () => void = () => {}
+    act(() => {
+      unsub = result.current.onCommit(spy)
+    })
+
+    act(() => FakeWS.last!._msg({ ...evt, prediction: 'A', source: 'static', confidence: 0.9 }))
+    expect(spy).toHaveBeenCalledWith('A', 'static', 0.9)
+
+    spy.mockClear()
+    act(() => FakeWS.last!._msg({ ...evt, prediction: null }))
+    expect(spy).not.toHaveBeenCalled()
+
+    act(() => unsub())
+    act(() => FakeWS.last!._msg({ ...evt, prediction: 'B', source: 'static', confidence: 0.7 }))
+    expect(spy).not.toHaveBeenCalled()
   })
 
   it('closes the socket on unmount without reconnecting', () => {

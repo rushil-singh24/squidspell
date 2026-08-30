@@ -1,10 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { PredictionClient } from '../lib/predictionClient'
 import { WS_URL } from '../lib/config'
 import type { ConnectionStatus, PredictionEvent } from '../types'
 
+export type CommitListener = (
+  letter: string,
+  source: 'static' | 'motion',
+  confidence: number,
+) => void
+
 export function usePrediction(url: string = WS_URL) {
   const clientRef = useRef<PredictionClient | null>(null)
+  const commitCbs = useRef(new Set<CommitListener>())
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [lastEvent, setLastEvent] = useState<PredictionEvent | null>(null)
   const [lastError, setLastError] = useState<string | null>(null)
@@ -13,8 +20,13 @@ export function usePrediction(url: string = WS_URL) {
     const c = new PredictionClient(url)
     clientRef.current = c
     c.onStatus(setStatus)
-    c.onFrame(setLastEvent)
     c.onError(setLastError)
+    c.onFrame((e) => {
+      setLastEvent(e)
+      if (e.prediction && (e.source === 'static' || e.source === 'motion')) {
+        for (const cb of commitCbs.current) cb(e.prediction, e.source, e.confidence)
+      }
+    })
     c.connect()
     return () => {
       c.close()
@@ -22,10 +34,16 @@ export function usePrediction(url: string = WS_URL) {
     }
   }, [url])
 
-  return {
-    status,
-    lastEvent,
-    lastError,
-    sendLandmarks: (l: number[][] | null) => clientRef.current?.send(l),
-  }
+  const sendLandmarks = useCallback(
+    (l: number[][] | null) => clientRef.current?.send(l),
+    [],
+  )
+  const onCommit = useCallback((cb: CommitListener) => {
+    commitCbs.current.add(cb)
+    return () => {
+      commitCbs.current.delete(cb)
+    }
+  }, [])
+
+  return { status, lastEvent, lastError, sendLandmarks, onCommit }
 }

@@ -41,8 +41,8 @@ export function SquidMascot({
       <>
         <circle cx="46" cy="52" r="9" fill="#ffffff" />
         <circle cx="74" cy="52" r="9" fill="#ffffff" />
-        <circle cx="48" cy="54" r="4" fill="#08202b" />
-        <circle cx="76" cy="54" r="4" fill="#08202b" />
+        <circle cx="48" cy="54" r="4" fill="var(--sq-bg-deep)" />
+        <circle cx="76" cy="54" r="4" fill="var(--sq-bg-deep)" />
       </>
     )
 

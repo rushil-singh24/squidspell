@@ -7,6 +7,7 @@ class FakeWS {
   static last: FakeWS | null = null
   url: string
   readyState = 0
+  bufferedAmount = 0
   onopen: (() => void) | null = null
   onclose: ((e: { code: number }) => void) | null = null
   onmessage: ((e: { data: string }) => void) | null = null
@@ -98,6 +99,20 @@ describe('PredictionClient', () => {
     expect(FakeWS.last).not.toBe(first) // a new socket was created
     c.close()
     vi.useRealTimers()
+  })
+
+  it('close() clears listeners so a late onclose cannot emit status', () => {
+    const statuses: string[] = []
+    const c = new PredictionClient('ws://x', { WebSocketCtor: FakeWS as never })
+    c.connect()
+    FakeWS.last!._open()
+    c.onStatus((s) => statuses.push(s))
+    const sock = FakeWS.last!
+    c.close()
+    statuses.length = 0
+    sock.onclose?.({ code: 1006 })
+    expect(statuses).not.toContain('closed')
+    expect(statuses).toEqual([])
   })
 
   it('close() stops further reconnects', () => {

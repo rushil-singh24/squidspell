@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
+import { HandLandmarker } from '@mediapipe/tasks-vision'
 
 vi.mock('@mediapipe/tasks-vision', () => ({
   FilesetResolver: { forVisionTasks: vi.fn().mockResolvedValue({}) },
@@ -50,7 +51,8 @@ describe('useHandLandmarker', () => {
       getTracks: () => [{ stop: vi.fn() }],
     } as unknown as MediaStream)
 
-    const { result } = renderHook(() => useHandLandmarker())
+    const onFrame = vi.fn()
+    const { result } = renderHook(() => useHandLandmarker(onFrame))
     result.current.videoRef.current = document.createElement('video')
 
     await waitFor(() => expect(result.current.status).toBe('ready'))
@@ -60,6 +62,11 @@ describe('useHandLandmarker', () => {
     expect(lm[5][0]).toBeCloseTo(5 / 21)
     expect(lm[5][1]).toBeCloseTo(5 / 21)
     expect(lm[5][2]).toBe(0)
+
+    await waitFor(() => expect(onFrame).toHaveBeenCalled())
+    const arg = onFrame.mock.calls[0][0] as number[][]
+    expect(arg).toHaveLength(21)
+    expect(arg[0]).toHaveLength(3)
   })
 
   it('maps a NotAllowedError from getUserMedia to denied', async () => {
@@ -68,5 +75,30 @@ describe('useHandLandmarker', () => {
     const { result } = renderHook(() => useHandLandmarker())
 
     await waitFor(() => expect(result.current.status).toBe('denied'))
+  })
+
+  it('a detectForVideo throw on the first tick does not immediately error the hook', async () => {
+    getUserMedia.mockResolvedValue({
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream)
+    vi.mocked(HandLandmarker.createFromOptions).mockResolvedValueOnce({
+      detectForVideo: () => {
+        throw new Error('detect boom')
+      },
+      close: vi.fn(),
+    } as never)
+
+    const rafSpy = vi.fn((cb: FrameRequestCallback) => {
+      if (rafSpy.mock.calls.length === 1) cb(0)
+      return 1
+    })
+    vi.stubGlobal('requestAnimationFrame', rafSpy)
+
+    const { result } = renderHook(() => useHandLandmarker())
+    result.current.videoRef.current = document.createElement('video')
+
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    await waitFor(() => expect(rafSpy.mock.calls.length).toBeGreaterThanOrEqual(2))
+    expect(result.current.status).toBe('ready')
   })
 })

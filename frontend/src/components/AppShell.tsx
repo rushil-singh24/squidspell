@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useHandLandmarker } from '../hooks/useHandLandmarker'
 import { usePrediction } from '../hooks/usePrediction'
 import { WebcamPane } from './WebcamPane'
@@ -11,19 +11,9 @@ import type { Mode } from '../types'
 
 export function AppShell() {
   const [mode, setMode] = useState<Mode>('train')
-  const hand = useHandLandmarker()
   const prediction = usePrediction()
+  const hand = useHandLandmarker(prediction.sendLandmarks)
   const [dismissedError, setDismissedError] = useState<string | null>(null)
-
-  const { sendLandmarks } = prediction
-  useEffect(() => {
-    sendLandmarks(hand.landmarks)
-    // `sendLandmarks` is intentionally omitted: it is a fresh closure every render
-    // (not memoised in usePrediction), so including it would re-fire on every
-    // render instead of once per landmark change. oxlint has no exhaustive-deps
-    // rule enabled, so this stays lint-green.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hand.landmarks])
 
   const showError =
     prediction.lastError !== null && prediction.lastError !== dismissedError

@@ -3,12 +3,13 @@ import type { ConnectionStatus, PredictionEvent } from '../types'
 import type { HandStatus } from '../hooks/useHandLandmarker'
 import { SkeletonOverlay } from './SkeletonOverlay'
 
-const fill: CSSProperties = {
+const stage: CSSProperties = {
   position: 'absolute',
-  top: 0,
-  left: 0,
-  width: '100%',
-  height: '100%',
+  inset: 0,
+  margin: 'auto',
+  aspectRatio: '4 / 3',
+  maxWidth: '100%',
+  maxHeight: '100%',
 }
 
 const readout: CSSProperties = {
@@ -16,7 +17,7 @@ const readout: CSSProperties = {
   fontSize: 12,
   padding: '2px 8px',
   borderRadius: 6,
-  background: 'color-mix(in srgb, var(--sq-surface) 82%, transparent)',
+  background: 'color-mix(in srgb, var(--sq-surface) 80%, transparent)',
   color: 'var(--sq-fg-muted)',
   lineHeight: 1.4,
 }
@@ -54,16 +55,25 @@ export function WebcamPane({
 
   return (
     <div className="w-full h-full" style={{ position: 'relative' }}>
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        playsInline
-        style={{ ...fill, objectFit: 'cover', transform: 'scaleX(-1)' }}
-      />
+      <div style={stage}>
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
+        />
 
-      <div style={{ ...fill, transform: 'scaleX(-1)', pointerEvents: 'none' }}>
-        <SkeletonOverlay landmarks={landmarks} className="absolute inset-0" />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            transform: 'scaleX(-1)',
+            pointerEvents: 'none',
+          }}
+        >
+          <SkeletonOverlay landmarks={landmarks} />
+        </div>
       </div>
 
       <div style={{ ...readout, top: 8, left: 8 }}>{fps} fps</div>

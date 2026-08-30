@@ -73,6 +73,7 @@ export class PredictionClient {
   send(landmarks: number[][] | null) {
     const ws = this.ws
     if (!ws || ws.readyState !== 1 /* OPEN */) return
+    if (ws.bufferedAmount > 65536) return // backend stalled — drop this frame
     ws.send(JSON.stringify({ landmarks, t: Date.now() }))
   }
 
@@ -82,6 +83,9 @@ export class PredictionClient {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
+    this.frameCbs = []
+    this.errorCbs = []
+    this.statusCbs = []
     this.ws?.close()
   }
 }

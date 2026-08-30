@@ -2,17 +2,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AppShell } from './AppShell'
+import { useHandLandmarker } from '../hooks/useHandLandmarker'
 
-let currentLandmarks: number[][] | null = null
+const baseHandValue = {
+  videoRef: { current: null },
+  landmarks: null as number[][] | null,
+  fps: 0,
+  status: 'loading' as const,
+  error: null as string | null,
+}
 
 vi.mock('../hooks/useHandLandmarker', () => ({
-  useHandLandmarker: () => ({
-    videoRef: { current: null },
-    landmarks: currentLandmarks,
-    fps: 0,
-    status: 'loading',
-    error: null,
-  }),
+  useHandLandmarker: vi.fn(() => baseHandValue),
 }))
 
 const mockPrediction = {
@@ -20,6 +21,7 @@ const mockPrediction = {
   lastEvent: null,
   lastError: null as string | null,
   sendLandmarks: vi.fn(),
+  onCommit: vi.fn(() => () => {}),
 }
 
 vi.mock('../hooks/usePrediction', () => ({
@@ -31,9 +33,9 @@ vi.mock('./WebcamPane', () => ({
 }))
 
 beforeEach(() => {
-  currentLandmarks = null
   mockPrediction.lastError = null
   mockPrediction.sendLandmarks.mockClear()
+  vi.mocked(useHandLandmarker).mockClear()
 })
 
 describe('AppShell', () => {
@@ -61,13 +63,8 @@ describe('AppShell', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('sends landmarks to the prediction hook whenever they change', () => {
-    const { rerender } = render(<AppShell />)
-    expect(mockPrediction.sendLandmarks).toHaveBeenCalledTimes(1)
-    expect(mockPrediction.sendLandmarks).toHaveBeenLastCalledWith(null)
-
-    currentLandmarks = [[1, 2, 3]]
-    rerender(<AppShell />)
-    expect(mockPrediction.sendLandmarks).toHaveBeenLastCalledWith([[1, 2, 3]])
+  it('wires the prediction send callback into the hand landmarker hook', () => {
+    render(<AppShell />)
+    expect(useHandLandmarker).toHaveBeenCalledWith(mockPrediction.sendLandmarks)
   })
 })
