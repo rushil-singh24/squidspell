@@ -46,7 +46,9 @@ def test_ws_emits_one_message_per_frame_with_schema(ws_app):
     assert set(msg) == {
         "prediction", "confidence", "source", "static_label",
         "static_confidence", "motion_active", "fps", "timestamp", "client_timestamp",
+        "transcript",
     }
+    assert msg["transcript"] is None
     assert msg["static_label"] == "A"
     assert msg["static_confidence"] == 0.95
     assert msg["motion_active"] is False
@@ -109,6 +111,64 @@ def test_ws_binary_frame_gets_error_and_survives(ws_app):
             assert "error" in err
             ws.send_json({"landmarks": None})
             assert "error" not in ws.receive_json()
+
+
+def test_ws_transcript_null_until_train_mode(ws_app):
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"landmarks": None})
+            msg = ws.receive_json()
+            assert msg["transcript"] is None
+
+
+def test_ws_train_mode_makes_transcript_a_string(ws_app, monkeypatch):
+    ticks = iter(range(0, 20_000, 40))  # 40 ms per frame, monotonic
+    monkeypatch.setattr("app.main.time.monotonic", lambda: next(ticks) / 1000.0)
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "train"})
+            ws.send_json({"landmarks": None})
+            msg = ws.receive_json()
+            assert msg["transcript"] == ""
+
+            # space on an empty transcript is a no-op (no leading space)
+            ws.send_json({"action": "space"})
+            ws.send_json({"landmarks": None})
+            assert ws.receive_json()["transcript"] == ""
+
+            # drive a real commit of "A"
+            transcripts = []
+            for _ in range(40):
+                ws.send_json({"landmarks": _frame()})
+                transcripts.append(ws.receive_json()["transcript"])
+            assert "A" in transcripts
+
+            # delete removes it
+            ws.send_json({"action": "delete"})
+            ws.send_json({"landmarks": _frame()})
+            assert ws.receive_json()["transcript"] == ""
+
+
+def test_ws_unknown_mode_and_action_error_keep_open(ws_app):
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "sideways"})
+            assert "error" in ws.receive_json()
+            ws.send_json({"action": "explode"})
+            assert "error" in ws.receive_json()
+            ws.send_json({"landmarks": None})
+            ok = ws.receive_json()
+            assert "error" not in ok and ok["transcript"] is None
+
+
+def test_ws_mode_frame_not_treated_as_landmarks(ws_app):
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "train"})
+            ws.send_json({"landmarks": None})
+            msg = ws.receive_json()
+            # exactly one response: the mode frame produced no outbound frame
+            assert msg["transcript"] == "" and "static_label" in msg
 
 
 def test_ws_connections_are_isolated(ws_app, monkeypatch):

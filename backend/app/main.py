@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.prediction import PredictionService
+from app.transcript import TranscriptBuilder, VALID_ACTIONS
 
 _FPS_WINDOW_SECONDS = 1.0
 _logger = logging.getLogger("squidspell.ws")
@@ -90,6 +91,8 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
         await websocket.accept()
         engine = websocket.app.state.service.new_engine()
         recv_times: deque[float] = deque()
+        mode: str | None = None
+        transcript: TranscriptBuilder | None = None
         try:
             while True:
                 try:
@@ -109,6 +112,23 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
                     })
                     continue
 
+                if "mode" in msg:
+                    new_mode = msg["mode"]
+                    if new_mode not in (None, "train", "race"):
+                        await websocket.send_json({"error": "unknown mode", "timestamp": int(time.time() * 1000)})
+                        continue
+                    mode = new_mode
+                    transcript = TranscriptBuilder() if mode == "train" else None
+                    continue
+                if "action" in msg:
+                    action = msg["action"]
+                    if action not in VALID_ACTIONS:
+                        await websocket.send_json({"error": "unknown action", "timestamp": int(time.time() * 1000)})
+                        continue
+                    if transcript is not None:
+                        transcript.apply(action)
+                    continue
+
                 raw = msg.get("landmarks")
                 client_ts = msg.get("t")
                 if not _valid_landmarks(raw):
@@ -126,6 +146,9 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
 
                 result = engine.process_frame(_to_tuples(raw), now_mono * 1000.0)
 
+                if transcript is not None and result.committed_letter is not None:
+                    transcript.commit_letter(result.committed_letter, now_mono * 1000.0)
+
                 await websocket.send_json({
                     "prediction": result.committed_letter,
                     "confidence": result.committed_confidence if result.committed_letter else 0.0,
@@ -136,6 +159,7 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
                     "fps": fps,
                     "timestamp": int(time.time() * 1000),
                     "client_timestamp": client_ts,
+                    "transcript": transcript.text if transcript is not None else None,
                 })
         except WebSocketDisconnect:
             return
