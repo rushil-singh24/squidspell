@@ -81,6 +81,28 @@ describe('usePrediction', () => {
     expect(JSON.parse(FakeWS.last!.sent[0]).landmarks).toEqual([[1, 2, 3]])
   })
 
+  it('exposes transcript from frames, retaining it when a frame carries null', () => {
+    const { result } = renderHook(() => usePrediction('ws://test'))
+    act(() => FakeWS.last!._open())
+    expect(result.current.transcript).toBe('')
+
+    act(() => FakeWS.last!._msg({ ...evt, transcript: 'HI' }))
+    expect(result.current.transcript).toBe('HI')
+
+    act(() => FakeWS.last!._msg({ ...evt, transcript: null }))
+    expect(result.current.transcript).toBe('HI')
+  })
+
+  it('setMode and sendAction call through to the client', () => {
+    const { result } = renderHook(() => usePrediction('ws://test'))
+    act(() => FakeWS.last!._open())
+    act(() => result.current.setMode('train'))
+    act(() => result.current.sendAction('space'))
+    const payloads = FakeWS.last!.sent.map((s) => JSON.parse(s))
+    expect(payloads).toContainEqual({ mode: 'train' })
+    expect(payloads).toContainEqual({ action: 'space' })
+  })
+
   it('fires onCommit synchronously for commit events and stops after unsubscribe', () => {
     const { result } = renderHook(() => usePrediction('ws://test'))
     act(() => FakeWS.last!._open())

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useHandLandmarker } from '../hooks/useHandLandmarker'
 import { usePrediction } from '../hooks/usePrediction'
 import { WebcamPane } from './WebcamPane'
@@ -14,6 +14,10 @@ export function AppShell() {
   const prediction = usePrediction()
   const hand = useHandLandmarker(prediction.sendLandmarks)
   const [dismissedError, setDismissedError] = useState<string | null>(null)
+
+  useEffect(() => {
+    prediction.setMode(mode)
+  }, [mode, prediction.setMode])
 
   const showError =
     prediction.lastError !== null && prediction.lastError !== dismissedError

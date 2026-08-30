@@ -9,6 +9,7 @@ export class PredictionClient {
   private ws: WebSocket | null = null
   private stopped = false
   private attempt = 0
+  private mode: 'train' | 'race' | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private frameCbs: ((e: PredictionEvent) => void)[] = []
   private errorCbs: ((msg: string) => void)[] = []
@@ -42,6 +43,7 @@ export class PredictionClient {
     ws.onopen = () => {
       this.attempt = 0
       this.emitStatus('open')
+      if (this.mode !== null) this.rawSend({ mode: this.mode })
     }
     ws.onmessage = (ev: MessageEvent) => {
       let data: unknown
@@ -70,11 +72,24 @@ export class PredictionClient {
     }
   }
 
-  send(landmarks: number[][] | null) {
+  private rawSend(payload: unknown): void {
     const ws = this.ws
     if (!ws || ws.readyState !== 1 /* OPEN */) return
     if (ws.bufferedAmount > 65536) return // backend stalled — drop this frame
-    ws.send(JSON.stringify({ landmarks, t: Date.now() }))
+    ws.send(JSON.stringify(payload))
+  }
+
+  send(landmarks: number[][] | null) {
+    this.rawSend({ landmarks, t: Date.now() })
+  }
+
+  setMode(mode: 'train' | 'race' | null): void {
+    this.mode = mode
+    this.rawSend({ mode })
+  }
+
+  sendAction(action: 'delete' | 'space' | 'clear'): void {
+    this.rawSend({ action })
   }
 
   close() {

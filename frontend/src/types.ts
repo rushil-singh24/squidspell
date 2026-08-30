@@ -11,4 +11,5 @@ export interface PredictionEvent {
   fps: number
   timestamp: number
   client_timestamp: number | null
+  transcript: string | null
 }

@@ -15,6 +15,7 @@ export function usePrediction(url: string = WS_URL) {
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [lastEvent, setLastEvent] = useState<PredictionEvent | null>(null)
   const [lastError, setLastError] = useState<string | null>(null)
+  const [transcript, setTranscript] = useState('')
 
   useEffect(() => {
     const c = new PredictionClient(url)
@@ -23,6 +24,7 @@ export function usePrediction(url: string = WS_URL) {
     c.onError(setLastError)
     c.onFrame((e) => {
       setLastEvent(e)
+      if (typeof e.transcript === 'string') setTranscript(e.transcript)
       if (e.prediction && (e.source === 'static' || e.source === 'motion')) {
         for (const cb of commitCbs.current) cb(e.prediction, e.source, e.confidence)
       }
@@ -38,6 +40,14 @@ export function usePrediction(url: string = WS_URL) {
     (l: number[][] | null) => clientRef.current?.send(l),
     [],
   )
+  const setMode = useCallback(
+    (m: 'train' | 'race' | null) => clientRef.current?.setMode(m),
+    [],
+  )
+  const sendAction = useCallback(
+    (a: 'delete' | 'space' | 'clear') => clientRef.current?.sendAction(a),
+    [],
+  )
   const onCommit = useCallback((cb: CommitListener) => {
     commitCbs.current.add(cb)
     return () => {
@@ -45,5 +55,14 @@ export function usePrediction(url: string = WS_URL) {
     }
   }, [])
 
-  return { status, lastEvent, lastError, sendLandmarks, onCommit }
+  return {
+    status,
+    lastEvent,
+    lastError,
+    transcript,
+    sendLandmarks,
+    setMode,
+    sendAction,
+    onCommit,
+  }
 }

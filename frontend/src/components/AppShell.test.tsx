@@ -22,6 +22,9 @@ const mockPrediction = {
   lastError: null as string | null,
   sendLandmarks: vi.fn(),
   onCommit: vi.fn(() => () => {}),
+  transcript: '',
+  setMode: vi.fn(),
+  sendAction: vi.fn(),
 }
 
 vi.mock('../hooks/usePrediction', () => ({
@@ -35,6 +38,8 @@ vi.mock('./WebcamPane', () => ({
 beforeEach(() => {
   mockPrediction.lastError = null
   mockPrediction.sendLandmarks.mockClear()
+  mockPrediction.setMode.mockClear()
+  mockPrediction.sendAction.mockClear()
   vi.mocked(useHandLandmarker).mockClear()
 })
 
@@ -61,6 +66,15 @@ describe('AppShell', () => {
 
     await user.click(screen.getByRole('button', { name: /dismiss/i }))
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('pushes the active mode to the prediction client on mount and on toggle', async () => {
+    const user = userEvent.setup()
+    render(<AppShell />)
+    expect(mockPrediction.setMode).toHaveBeenCalledWith('train')
+
+    await user.click(screen.getByRole('tab', { name: 'Race' }))
+    expect(mockPrediction.setMode).toHaveBeenCalledWith('race')
   })
 
   it('wires the prediction send callback into the hand landmarker hook', () => {

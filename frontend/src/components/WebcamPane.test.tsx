@@ -19,6 +19,7 @@ function mkEvent(partial: Partial<PredictionEvent>): PredictionEvent {
     fps: 0,
     timestamp: 0,
     client_timestamp: null,
+    transcript: null,
     ...partial,
   }
 }

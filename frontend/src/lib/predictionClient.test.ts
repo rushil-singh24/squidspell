@@ -74,6 +74,43 @@ describe('PredictionClient', () => {
     expect(JSON.parse(FakeWS.last!.sent[1]).landmarks).toBeNull()
   })
 
+  it('setMode: nothing before open, sends {mode} on open, re-sends on reconnect', () => {
+    vi.useFakeTimers()
+    const c = new PredictionClient('ws://x', {
+      WebSocketCtor: FakeWS as never,
+      backoff: [100],
+    })
+    c.connect()
+    c.setMode('train')
+    const first = FakeWS.last!
+    expect(first.sent).toHaveLength(0)
+    first._open()
+    expect(first.sent.map((s) => JSON.parse(s))).toContainEqual({ mode: 'train' })
+
+    first.readyState = FakeWS.CLOSED
+    first.onclose?.({ code: 1006 }) // unexpected
+    vi.advanceTimersByTime(100)
+    const second = FakeWS.last!
+    expect(second).not.toBe(first)
+    second._open()
+    expect(second.sent.map((s) => JSON.parse(s))).toContainEqual({ mode: 'train' })
+
+    c.close()
+    vi.useRealTimers()
+  })
+
+  it('sendAction sends {action} only when open', () => {
+    const c = new PredictionClient('ws://x', { WebSocketCtor: FakeWS as never })
+    c.connect()
+    c.sendAction('space') // not open -> dropped
+    expect(FakeWS.last!.sent).toHaveLength(0)
+    FakeWS.last!._open()
+    c.sendAction('space')
+    expect(FakeWS.last!.sent.map((s) => JSON.parse(s))).toContainEqual({
+      action: 'space',
+    })
+  })
+
   it('routes an {error} message to onError, not onFrame', () => {
     const errs: string[] = []
     const frames: unknown[] = []
