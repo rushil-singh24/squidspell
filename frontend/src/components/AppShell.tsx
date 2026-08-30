@@ -5,7 +5,7 @@ import { WebcamPane } from './WebcamPane'
 import { ModeToggle } from './ModeToggle'
 import { ThemeToggle } from './ThemeToggle'
 import { PanelSwap } from '../motion/PanelSwap'
-import { TrainPanePlaceholder } from '../modes/TrainPanePlaceholder'
+import { TrainPane } from '../modes/TrainPane'
 import { RacePanePlaceholder } from '../modes/RacePanePlaceholder'
 import type { Mode } from '../types'
 
@@ -51,7 +51,10 @@ export function AppShell() {
         <div style={{ flex: 1, minHeight: 0 }}>
           <PanelSwap swapKey={mode}>
             {mode === 'train' ? (
-              <TrainPanePlaceholder />
+              <TrainPane
+                transcript={prediction.transcript}
+                onAction={prediction.sendAction}
+              />
             ) : (
               <RacePanePlaceholder />
             )}

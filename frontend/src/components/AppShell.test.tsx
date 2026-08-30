@@ -50,7 +50,7 @@ describe('AppShell', () => {
 
     expect(screen.getByRole('tab', { name: 'Train' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Race' })).toBeInTheDocument()
-    expect(screen.getByText(/Train mode/)).toBeInTheDocument()
+    expect(screen.getByText(/Sign a letter to start/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Race' }))
     expect(await screen.findByText(/Race mode/)).toBeInTheDocument()

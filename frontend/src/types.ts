@@ -1,5 +1,6 @@
 export type ConnectionStatus = 'connecting' | 'open' | 'closed' | 'error'
 export type Mode = 'train' | 'race'
+export type TranscriptAction = 'delete' | 'space' | 'clear'
 
 export interface PredictionEvent {
   prediction: string | null

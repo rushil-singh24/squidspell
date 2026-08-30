@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PredictionClient } from '../lib/predictionClient'
 import { WS_URL } from '../lib/config'
-import type { ConnectionStatus, PredictionEvent } from '../types'
+import type { ConnectionStatus, PredictionEvent, TranscriptAction } from '../types'
 
 export type CommitListener = (
   letter: string,
@@ -45,7 +45,7 @@ export function usePrediction(url: string = WS_URL) {
     [],
   )
   const sendAction = useCallback(
-    (a: 'delete' | 'space' | 'clear') => clientRef.current?.sendAction(a),
+    (a: TranscriptAction) => clientRef.current?.sendAction(a),
     [],
   )
   const onCommit = useCallback((cb: CommitListener) => {

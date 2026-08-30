@@ -1,4 +1,4 @@
-import type { ConnectionStatus, PredictionEvent } from '../types'
+import type { ConnectionStatus, PredictionEvent, TranscriptAction } from '../types'
 
 type WSCtor = { new (url: string): WebSocket }
 
@@ -88,7 +88,7 @@ export class PredictionClient {
     this.rawSend({ mode })
   }
 
-  sendAction(action: 'delete' | 'space' | 'clear'): void {
+  sendAction(action: TranscriptAction): void {
     this.rawSend({ action })
   }
 
