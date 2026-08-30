@@ -58,9 +58,30 @@ dependency-free Node script that copies the WASM out of
 `pretest` npm hooks. Both directories are gitignored; the assets are served
 locally rather than from a CDN.
 
+## Train mode controls
+
+The right-hand pane in Train mode shows an auto-scrolling transcript that the
+**backend** builds from the letters you sign (see the `[Phase 6]` entries in the
+repo's `DECISIONS.md`). Below it:
+
+- **`␣ Space`** and **`⌫ Delete`** fire immediately on click — there is no
+  confirm step. Worst case is one extra space or one lost character, both cheap
+  to undo by signing again.
+- **`Clear (hold)`** is press-and-hold for ~1 second, with a red fill that tracks
+  the hold; releasing early cancels and clears nothing. It is also
+  keyboard-operable — focus it and hold Space or Enter.
+- **`Save`** keeps the current transcript in this browser only
+  (`localStorage`, this device — it is not sent anywhere). **`Download`** writes
+  the transcript to a `.txt` file.
+
+Control **gestures** (signing a pose to delete / space / clear instead of
+clicking) are **not wired yet** — the poses will be chosen during a future
+data-collection pass so they stay visually distinct from the 26 letters. See
+`DECISIONS.md`'s `[Phase 6]` entries.
+
 ## What's stubbed
 
-`src/modes/TrainPanePlaceholder.tsx` and `src/modes/RacePanePlaceholder.tsx`
-are exported placeholders for the right-hand pane. Phase 6 replaces the Train
-placeholder and Phase 7 the Race placeholder, both by swapping the import in
-`src/components/AppShell.tsx`.
+`src/modes/RacePanePlaceholder.tsx` is an exported placeholder for the
+right-hand pane in Race mode. Phase 7 replaces it by swapping the import in
+`src/components/AppShell.tsx` — the same way Phase 6 replaced the Train
+placeholder with `src/modes/TrainPane.tsx`.

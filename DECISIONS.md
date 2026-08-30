@@ -453,3 +453,73 @@ dev proxy adds a layer with no benefit, and centralising env access in one
 module keeps `import.meta.env` from scattering.
 Affects: Phase 9/10 configure the deployed URLs through these two env vars; any
 new backend call reads its base URL from `config.ts`.
+
+## [Phase 6] Server-authoritative transcript; mode-parameterized `/ws/predict`
+Decided: The client sends `{"mode":"train"|"race"|null}` on connect (and re-sends
+it on every reconnect); a `train`-mode connection keeps a per-connection
+`TranscriptBuilder` (`backend/app/transcript.py`). Committed letters from the
+inference engine and inbound `{"action":"delete"|"space"|"clear"}` messages both
+mutate it, and every outbound prediction frame now carries `transcript: str |
+null` (the current text for a train connection, `null` otherwise). An unknown
+mode or action gets an `{"error": ...}` reply and the socket stays open.
+Why: Chosen over a client-side transcript so the same pattern serves Phase 7's
+server-side Race scorer and matches the spec's "one FastAPI app, internal modules
+(prediction / transcript / race)". Keeping the transcript next to the engine that
+produces the commits avoids a second source of truth for what has been signed.
+Affects: Phase 7 adds a `race` branch to the same mode switch plus a
+`backend/app/race.py` scorer that attaches to the same per-connection engine;
+Phase 8's history persistence reads `usePrediction().transcript`.
+
+## [Phase 6] No time-window dedupe in `TranscriptBuilder`
+Decided: `commit_letter(letter, ts)` appends the (uppercased) letter
+unconditionally — the only guard is an exact byte-identical duplicate frame
+(same letter, same timestamp), which is dropped. There is no "ignore a repeat
+within N ms" window.
+Why: The inference layer already commits a letter only once per stable run
+(majority vote held ≥ `STATIC_STABLE_MS`, re-commit only after the majority
+changes), so a second dedupe layer here would be redundant — and a time window
+would swallow deliberate double letters (LL, SS, EE).
+Affects: Nothing downstream. Known limitation: two identical letters signed
+faster than the smoother can re-stabilise (~500 ms `STATIC_STABLE_MS`) merge
+into one — acceptable for v1; the fix, if ever needed, is a brief "letter
+released" gap requirement in the smoother, not a timer in `TranscriptBuilder`.
+
+## [Phase 6] `GESTURE_ACTIONS = {}` — control-gesture poses deferred
+Decided: `GESTURE_ACTIONS: dict[str, str]` in `transcript.py` is empty. Delete /
+Space / Clear are driven only by on-screen buttons in `TrainPane` this phase.
+This entry is the "log the final gesture-to-action mapping in DECISIONS.md" the
+Phase 6 spec asks for — the current mapping is deliberately "none; the buttons
+are the mechanism".
+Why: A pose→action map is only safe once the poses are known to be visually
+distinct from the 26 letters, and that judgement needs the Phase 1/2 data
+already in hand plus a dedicated pass to pick and validate candidate poses.
+Shipping an empty map keeps the seam in place without guessing.
+Affects: The `frontend/README.md` Train-mode controls section (documents
+gestures as not wired yet); a future data-collection pass that picks the poses.
+Wiring a chosen pose is then a one-line `GESTURE_ACTIONS` entry plus a
+client-side detector that sends the matching `{"action"}` message.
+
+## [Phase 6] Hold-to-Clear is client-side timing only
+Decided: `HoldButton` (`frontend/src/components/HoldButton.tsx`) delays the
+`{"action":"clear"}` send by `durationMs` (1000 in `TrainPane`) while showing a
+fill indicator; releasing early cancels and sends nothing. The server just
+applies `clear` when the message finally arrives — it does no timing. The
+on-screen Clear control IS the hold button; there is no separate instant-clear
+path.
+Why: Clear is the one destructive Train action, so it inherits the
+"destructive-action-needs-intent" rule. With no control gesture yet, the button
+is the sole clear mechanism, so the intent gate lives on the button. Keeping the
+delay client-side keeps the server's action handler a plain switch.
+Affects: The `frontend/README.md` Train-mode controls section.
+
+## [Phase 6] Train history is client-only
+Decided: Saved Train transcripts live in React `useState` seeded from and mirrored
+to `localStorage["squidspell-train-history"]`; every read and write is wrapped in
+try/catch so a private window, cleared storage, or a JSON-parse failure degrades
+to an empty list rather than throwing. There is no REST endpoint and no server
+persistence.
+Why: History is a per-device convenience this phase, not shared data. Adding a
+backend store now would be throwaway work.
+Affects: Phase 8 replaces this with direct Supabase persistence (auth + a
+`transcripts` table); the `localStorage` key and shape are the migration
+starting point.

@@ -1,22 +1,27 @@
 # SquidSpell — Handoff
 
-**Last updated:** Phase 5 code + documentation complete and committed (2026-08-30). `frontend/`
-is now the SquidSpell shared shell: a live webcam pane with in-browser MediaPipe
-(`@mediapipe/tasks-vision` `HandLandmarker`, VIDEO mode) skeleton overlay, a `/ws/predict`-fed
-corner readout (fps, connection dot, prediction / confidence / MOTION), a Train/Race nav toggle
-with `PanelSwap` pane transitions, the underwater theme + `useTheme` dark/light toggle, a small
-set of `useReducedMotion`-gated Framer Motion primitives (`PageTransition` / `PanelSwap` /
-`CommitPop`), the hand-built squid mascot, and a drifting-bubble background. Gate all green:
-`cd frontend && npm run lint && npm test && npm run build` — **45 tests**. Train/Race panes are
-exported placeholders (`frontend/src/modes/TrainPanePlaceholder.tsx` /
-`RacePanePlaceholder.tsx`) for Phases 6/7 to replace via the `AppShell` import. Run:
+**Last updated:** Phase 6 (Mode A: Train) code + documentation complete and committed
+(2026-08-30). `/ws/predict` is now mode-aware: the client sends `{"mode":"train"|"race"|null}`
+(re-sent on reconnect) and `{"action":"delete"|"space"|"clear"}`; a `train` connection keeps a
+per-connection `TranscriptBuilder` (`backend/app/transcript.py`, pure) fed by committed letters
++ actions, and every outbound frame carries `transcript: str | null`. On the frontend,
+`PredictionClient`/`usePrediction` expose `transcript` / `setMode` / `sendAction`, and
+`frontend/src/modes/TrainPane.tsx` (replacing `TrainPanePlaceholder`) renders an auto-scrolling
+transcript panel (`CommitPop` on the newest char), instant `␣ Space` / `⌫ Delete` buttons, a
+`Clear (hold)` control (`HoldButton`, ~1s press-and-hold with a fill indicator, keyboard-operable),
+Save / Download, and a client-only history in `localStorage["squidspell-train-history"]`, with a
+`SquidMascot` empty state. Gates all green: `cd backend && python -m pytest tests/ -q` (**36**)
+and `cd frontend && npm run lint && npm test && npm run build` (**67 tests**). Run:
 `cd frontend && npm run dev` → http://localhost:5173 (needs the Phase 4 backend on `:8000` for
-live predictions; the shell still renders without it). See `frontend/README.md` and the
-`[Phase 5]` entries in `DECISIONS.md`.
-**Two human passes are owed:** (1) the Phase 3 `python ml/live_demo.py` webcam verification —
-still pending, confirm all 26 letters incl. J/Z before Phase 3 formally closes; and (2) a new
-Phase 5 visual / animation / allow-camera look (the shell has never been rendered in a real
-browser with a real webcam).
+live predictions; the shell still renders without it). `TrainPanePlaceholder` is gone;
+`RacePanePlaceholder` remains for Phase 7. See `frontend/README.md` and the `[Phase 6]` entries
+in `DECISIONS.md`.
+**Three human passes are owed:** (1) the Phase 3 `python ml/live_demo.py` webcam verification —
+still pending, confirm all 26 letters incl. J/Z before Phase 3 formally closes; (2) the Phase 5
+visual / animation / allow-camera look (the shell has never been rendered in a real browser with
+a real webcam); and (3) a new Phase 6 end-to-end pass — with `cd frontend && npm run dev` and
+the backend running, a human signs a short word and confirms the transcript accumulates
+correctly and the Space / Delete / hold-to-Clear / Save / Download controls all work.
 
 **Resume from cold (fresh clone or new machine):**
 ```bash
@@ -114,10 +119,23 @@ are fixed. See `DECISIONS.md`'s six `[Phase 5]` entries for the client-side-Medi
 assets call, the test stack + gate, the single-`PredictionClient` rule, `useTheme`-not-a-context,
 the deferred Lottie, and no-dev-proxy.
 
-**Phase 6 (Mode A: Train) is next.** It replaces `frontend/src/modes/TrainPanePlaceholder.tsx`
-via the `AppShell` import, reads `lastEvent` / `status` from the existing `usePrediction` hook
-(no second socket), and reuses the `src/motion/` primitives (`CommitPop` for letter commits).
-The Phase 4 backend and the Phase 5 shell are both ready.
+**Status as of 2026-08-30 (Phase 6): Train mode is code-complete, tested, and committed.**
+`backend/app/transcript.py` (`TranscriptBuilder` — pure: `commit_letter`, `apply(action)` over
+`VALID_ACTIONS = ("delete","space","clear")`, `reset`; `GESTURE_ACTIONS = {}` — poses TBD) and a
+mode-aware `/ws/predict` (per-connection `TranscriptBuilder` for `train`, `transcript` on every
+outbound frame) are committed; the frontend `TrainPane`, `HoldButton`, and the
+`transcript` / `setMode` / `sendAction` additions to `PredictionClient` / `usePrediction` /
+`AppShell` are committed. `cd backend && python -m pytest tests/ -q` (36) and
+`cd frontend && npm run lint && npm test && npm run build` (67) both green. See the five
+`[Phase 6]` entries in `DECISIONS.md` for the server-authoritative-transcript call, the
+no-time-window-dedupe rule, the deferred control gestures, hold-to-Clear, and client-only history.
+
+**Phase 7 (Mode B: Race) is next.** Race adds a `race` branch to the same `/ws/predict` mode
+switch plus a `backend/app/race.py` scorer that attaches to the same per-connection engine, and
+replaces `frontend/src/modes/RacePanePlaceholder.tsx` via the `AppShell` import. It reads
+`lastEvent` / `status` / `transcript` from the existing `usePrediction` hook (no second socket)
+and reuses the `src/motion/` primitives. The Phase 4 backend, the Phase 5 shell, and the Phase 6
+transcript plumbing are all ready.
 
 **Known minor follow-ups (non-blocking, deferred from Phase 0's reviews):**
 - ~~Unused Vite-scaffold demo assets and the default `frontend/README.md`~~ —
@@ -154,8 +172,12 @@ per phase so neither is a surprise mid-build.
   MediaPipe pipeline, 45 tests green). One visual + camera-permission pass
   owed — a human must open `npm run dev` in a real browser, allow the webcam
   once per profile, and eyeball the animation/theme/skeleton overlay.
-- **Phase 6 — Train mode:** needs the human signing at the webcam to verify
-  the transcript, gesture commands, etc. actually work end-to-end.
+- **Phase 6 — Train mode:** code done (transcript built server-side, `TrainPane`
+  renders it, 36 backend + 67 frontend tests green). Needs a human end-to-end
+  pass — with `cd frontend && npm run dev` and the backend running, sign a short
+  word and confirm the transcript accumulates correctly and the Space / Delete /
+  hold-to-Clear / Save / Download controls all work. (Control gestures are not
+  wired this phase — `GESTURE_ACTIONS = {}`, poses TBD; see `DECISIONS.md`.)
 - **Phase 7 — Race mode:** same — needs a human actually racing to verify
   scoring.
 - **Phase 8 — Auth & Persistence:** explicit human setup required *before*
@@ -179,6 +201,9 @@ exported. **Phase 3 code is complete as of 2026-08-28** — awaits human live-we
 **Phase 4 is complete as of 2026-08-28** — backend serves all endpoints and WebSocket schema.
 **Phase 5 is complete as of 2026-08-30** — `frontend/` shell renders the webcam pane, in-browser
 MediaPipe skeleton overlay, `/ws/predict` readout, Train/Race nav, theme, and motion primitives
-(45 tests green); one visual + camera-permission pass owed. **Phase 6 (Mode A: Train) is
-unblocked** and can proceed immediately — it swaps `frontend/src/modes/TrainPanePlaceholder.tsx`
-and reads from the existing `usePrediction` hook.
+(45 tests green); one visual + camera-permission pass owed. **Phase 6 (Mode A: Train) is complete
+as of 2026-08-30** — `/ws/predict` is mode-aware, `backend/app/transcript.py` builds the Train
+transcript server-side, and `frontend` `TrainPane` renders it (36 backend + 67 frontend tests
+green); one end-to-end human pass owed. **Phase 7 (Mode B: Race) is unblocked** and can proceed
+immediately — it adds a `race` branch to the same `/ws/predict` mode switch plus
+`backend/app/race.py`, and swaps `frontend/src/modes/RacePanePlaceholder.tsx`.
