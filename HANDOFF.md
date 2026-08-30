@@ -1,13 +1,22 @@
 # SquidSpell — Handoff
 
-**Last updated:** Phase 4 code + documentation complete and committed (2026-08-28). `backend/app/`
-(`_ml_bridge.py`, `prediction.py`, `main.py`) serves `/health`, `/models`, `/metrics`, and
-`WS /ws/predict`; backend test suite green (`cd backend && python -m pytest tests/ -q`, 19 passing).
-ML suite unchanged at 91 passing (Phase 4 Task 1 added 2 predictor-accessor tests). Run locally:
-`cd backend && uvicorn app.main:app --reload` (http://127.0.0.1:8000/docs for OpenAPI UI).
-One `ml/` change this phase: `StaticPredictor.algorithm`, `.feature_set` and `MotionPredictor.algorithm`
-read-only properties. **Live webcam verification for Phase 3 still pending** — the human must run
-`python ml/live_demo.py` and confirm all 26 letters incl. J/Z before Phase 3 formally closes.
+**Last updated:** Phase 5 code + documentation complete and committed (2026-08-30). `frontend/`
+is now the SquidSpell shared shell: a live webcam pane with in-browser MediaPipe
+(`@mediapipe/tasks-vision` `HandLandmarker`, VIDEO mode) skeleton overlay, a `/ws/predict`-fed
+corner readout (fps, connection dot, prediction / confidence / MOTION), a Train/Race nav toggle
+with `PanelSwap` pane transitions, the underwater theme + `useTheme` dark/light toggle, a small
+set of `useReducedMotion`-gated Framer Motion primitives (`PageTransition` / `PanelSwap` /
+`CommitPop`), the hand-built squid mascot, and a drifting-bubble background. Gate all green:
+`cd frontend && npm run lint && npm test && npm run build` — **45 tests**. Train/Race panes are
+exported placeholders (`frontend/src/modes/TrainPanePlaceholder.tsx` /
+`RacePanePlaceholder.tsx`) for Phases 6/7 to replace via the `AppShell` import. Run:
+`cd frontend && npm run dev` → http://localhost:5173 (needs the Phase 4 backend on `:8000` for
+live predictions; the shell still renders without it). See `frontend/README.md` and the
+`[Phase 5]` entries in `DECISIONS.md`.
+**Two human passes are owed:** (1) the Phase 3 `python ml/live_demo.py` webcam verification —
+still pending, confirm all 26 letters incl. J/Z before Phase 3 formally closes; and (2) a new
+Phase 5 visual / animation / allow-camera look (the shell has never been rendered in a real
+browser with a real webcam).
 
 **Resume from cold (fresh clone or new machine):**
 ```bash
@@ -86,18 +95,35 @@ frame source (WebSocket vs. webcam) and output format differ. See `DECISIONS.md`
 entries for the payload schema, sys.path bridge rationale, per-connection engine isolation, and
 metrics degradation.
 
-**Phase 5 (Frontend Shared Shell, Theme & Animation Foundation) is next.** Phase 5's webcam component
-must run MediaPipe Hands in-browser and emit the `/ws/predict` schema logged in `DECISIONS.md
-[Phase 4]` (`{"landmarks": [[x,y,z] ×21] | null, "t": <int>}`). The backend is ready to receive
-these frames immediately.
+**Status as of 2026-08-30 (Phase 5): the frontend shared shell is code-complete, tested, and committed.**
+`frontend/src/` now holds: `lib/config.ts` (env → `WS_URL` / `API_URL`), `index.css` `@theme` +
+`--sq-*` tokens, `hooks/useTheme.ts` + `components/ThemeToggle.tsx`, `motion/` (`spring` /
+`quickSpring`, `fadeSlide` / `crossfade` / `commitPop` variants, `pressable`; `PageTransition` /
+`PanelSwap` / `CommitPop`), `types.ts` + `lib/predictionClient.ts` + `hooks/usePrediction.ts`
+(WS wrapper, backoff `[500,1000,2000,5000]` ms, one `{landmarks, t}` per frame), `lib/landmarks.ts`
++ `hooks/useHandLandmarker.ts` (dynamic `import('@mediapipe/tasks-vision')`, `HandLandmarker`
+VIDEO mode, `getUserMedia`, rAF loop), `components/SkeletonOverlay.tsx` + `WebcamPane.tsx`,
+`components/SquidMascot.tsx` (inline SVG, Lottie deferred to Phase 11) + `BubbleField.tsx`,
+`components/ModeToggle.tsx` + `AppShell.tsx`, `modes/{Train,Race}PanePlaceholder.tsx`, and a
+rewritten `App.tsx`. Build tooling from Task 1: `scripts/copy-mediapipe.mjs` (`predev` /
+`prebuild` / `pretest` hooks) stages the WASM runtime + `hand_landmarker.task` into
+`public/mediapipe/` + `public/models/` (both gitignored); Vitest (resolved to v4) +
+`@testing-library/react` + `jsdom`. The Phase 0 Vite-scaffold sweep is done — the demo assets
+and the default `frontend/README.md` are gone, `index.html` `<title>` and `package.json` `name`
+are fixed. See `DECISIONS.md`'s six `[Phase 5]` entries for the client-side-MediaPipe / local
+assets call, the test stack + gate, the single-`PredictionClient` rule, `useTheme`-not-a-context,
+the deferred Lottie, and no-dev-proxy.
+
+**Phase 6 (Mode A: Train) is next.** It replaces `frontend/src/modes/TrainPanePlaceholder.tsx`
+via the `AppShell` import, reads `lastEvent` / `status` from the existing `usePrediction` hook
+(no second socket), and reuses the `src/motion/` primitives (`CommitPop` for letter commits).
+The Phase 4 backend and the Phase 5 shell are both ready.
 
 **Known minor follow-ups (non-blocking, deferred from Phase 0's reviews):**
-- Unused Vite-scaffold demo assets (`frontend/src/assets/hero.png`,
-  `react.svg`, `vite.svg`, `frontend/public/icons.svg`) and the default
-  Vite `frontend/README.md` are still in the tree — sweep these when Phase 5
-  brings in real theme assets.
-- `index.html`'s page title and `frontend/package.json`'s `name` still say
-  "frontend" — cosmetic, fix whenever Phase 5/11 touches those files.
+- ~~Unused Vite-scaffold demo assets and the default `frontend/README.md`~~ —
+  swept in Phase 5 Task 1; `frontend/README.md` was recreated in Task 9.
+- ~~`index.html` `<title>` / `frontend/package.json` `name` said "frontend"~~ —
+  fixed in Phase 5 Task 1 (`SquidSpell` / `squidspell-frontend`).
 - `frontend/.gitignore` duplicates a couple of rules already in the root
   `.gitignore` (harmless — the nested file wins).
 
@@ -124,9 +150,10 @@ per phase so neither is a surprise mid-build.
   including J/Z (an agent can write the loop but can't judge "did it read my E correctly").
 - **Phase 4 — Backend/WebSocket:** done — backend is script-testable with deterministic
   fake-landmark frames; no human needed. All endpoints tested and serving.
-- **Phase 5 — Frontend shell/theme:** mostly automatable; browser webcam
-  permission prompts need a human click once per browser profile, and
-  visual/animation polish benefits from a human actually looking at it.
+- **Phase 5 — Frontend shell/theme:** code done (shell + theme + motion +
+  MediaPipe pipeline, 45 tests green). One visual + camera-permission pass
+  owed — a human must open `npm run dev` in a real browser, allow the webcam
+  once per profile, and eyeball the animation/theme/skeleton overlay.
 - **Phase 6 — Train mode:** needs the human signing at the webcam to verify
   the transcript, gesture commands, etc. actually work end-to-end.
 - **Phase 7 — Race mode:** same — needs a human actually racing to verify
@@ -149,6 +176,9 @@ per phase so neither is a surprise mid-build.
 
 **Phase 2 is complete as of 2026-08-19** — static and motion classifiers are trained and
 exported. **Phase 3 code is complete as of 2026-08-28** — awaits human live-webcam verification.
-**Phase 4 is complete as of 2026-08-28** — backend serves all endpoints and WebSocket schema; ready
-for Phase 5 frontend integration. **Phase 5 (Frontend Shared Shell) is unblocked** and can proceed
-immediately; it must implement MediaPipe Hands in-browser and connect to the `/ws/predict` endpoint.
+**Phase 4 is complete as of 2026-08-28** — backend serves all endpoints and WebSocket schema.
+**Phase 5 is complete as of 2026-08-30** — `frontend/` shell renders the webcam pane, in-browser
+MediaPipe skeleton overlay, `/ws/predict` readout, Train/Race nav, theme, and motion primitives
+(45 tests green); one visual + camera-permission pass owed. **Phase 6 (Mode A: Train) is
+unblocked** and can proceed immediately — it swaps `frontend/src/modes/TrainPanePlaceholder.tsx`
+and reads from the existing `usePrediction` hook.

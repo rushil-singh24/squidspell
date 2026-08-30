@@ -361,3 +361,95 @@ Affects: Phase 10's CI must run the training scripts (or ship pre-trained
 `.pkl` files and JSON metrics) for full `/metrics` output. Phase 9's
 `Dockerfile.backend` must either run the training commands or use a volume
 mount to supply the regenerated JSON files.
+
+## [Phase 5] Client-side MediaPipe, assets served locally
+Decided: The browser runs `@mediapipe/tasks-vision`'s `HandLandmarker` in
+`VIDEO` running mode and streams `[[x,y,z] ×21] | null` landmark frames over
+`/ws/predict`; the backend never touches an image. The WASM runtime and the
+`hand_landmarker.task` bundle are copied into `frontend/public/` by
+`scripts/copy-mediapipe.mjs` (a dependency-free Node script wired to the
+`predev` / `prebuild` / `pretest` npm hooks) from `node_modules/@mediapipe/
+tasks-vision/wasm/*` and `ml/models/hand_landmarker.task` — not loaded from a
+CDN, so the app works offline and pins one known-good runtime version. The
+in-browser detector's confidence parameters mirror the Python side: 0.7
+min detection confidence, 0.5 min tracking confidence. `frontend/public/
+mediapipe/` and `frontend/public/models/` are gitignored (regenerable — the
+copy script rebuilds them).
+Why: Landmark extraction is latency-sensitive and keeps raw webcam video off
+the network; reusing `InferenceEngine`'s landmark contract (see `[Phase 4]`)
+keeps the backend pure. Serving the assets locally avoids a hard runtime
+dependency on a third-party CDN and version drift between the JS API and its
+WASM.
+Affects: Phase 9's `Dockerfile.frontend` must run `scripts/copy-mediapipe.mjs`
+during the image build (it needs `ml/models/hand_landmarker.task` present in
+the build context). A fresh clone has neither `public/` subdirectory until an
+`npm run dev` / `build` / `test` runs the hook.
+
+## [Phase 5] Frontend test stack and gate
+Decided: The frontend is unit-tested with Vitest + `@testing-library/react` +
+`jsdom`. The per-task gate is `cd frontend && npm run lint && npm test &&
+npm run build` (`npm run lint` = `oxlint`, `npm run build` = `tsc -b &&
+vite build`). All non-visual logic — WS client and backoff, landmark FPS /
+normalise helpers, theme hook, skeleton draw fn, component branching — is
+covered here (45 tests at end of Phase 5). Visual layout, animation feel, and
+real-webcam behaviour are a human pass, not automated. Vitest resolved to v4,
+not the 2.x the plan sketched — the registry lacked the 2.x pin and v4 runs
+the same suite unchanged.
+Why: The plan's TDD-per-task rule needs a fast headless runner; jsdom covers
+everything except the parts a human has to look at or sign in front of.
+Affects: Phases 6/7 add their Train/Race tests the same way and keep the same
+gate green.
+
+## [Phase 5] One `PredictionClient` per mount; `usePrediction` owns it
+Decided: `usePrediction` constructs exactly one `PredictionClient` per mount
+and tears it down (socket closed, reconnect timer cleared) on unmount.
+Reconnect uses a fixed backoff schedule `[500, 1000, 2000, 5000]` ms (last
+value repeats); `close()` stops reconnection for good. One WS message is sent
+per landmark frame as `{ landmarks, t }` (`t = Date.now()`), and the inbound
+event is consumed field-for-field as the 9-field `PredictionEvent` matching
+`[Phase 4]`'s outbound schema. `AppShell` calls `sendLandmarks(hand.landmarks)`
+from a single `useEffect` keyed on `[hand.landmarks]` only, so exactly one
+send happens per new frame and the subscription is not rebuilt every render.
+An inbound message with an `error` key is surfaced (error toast) without
+closing the socket.
+Why: A single owned client avoids duplicate sockets and reconnect storms; a
+bounded backoff keeps a downed backend from being hammered while still
+recovering quickly. Keying the send effect on the landmark array alone is what
+makes "one send per frame" hold.
+Affects: Phases 6/7 read `lastEvent` / `status` from the same `usePrediction`
+hook instance — they must not open a second socket.
+
+## [Phase 5] `useTheme` is per-hook state, not a context
+Decided: `useTheme` keeps its own state per call site; the shared source of
+truth is the `data-theme` attribute on `<html>` (plus `localStorage
+["squidspell-theme"]` for persistence), which CSS reads directly. Dark is the
+default; the toggle flips to a minimal light palette. `ThemeToggle` is mounted
+once, in `AppShell`.
+Why: There is a single live theme consumer today (the one toggle), so a
+context provider would be ceremony. The DOM attribute already broadcasts the
+value to every stylesheet.
+Affects: If a later phase needs multiple interactive theme consumers kept in
+sync, lift `useTheme` to a context then — the `data-theme` / `localStorage`
+contract stays the same.
+
+## [Phase 5] Lottie deferred — mascot is inline SVG + Framer Motion
+Decided: The squid mascot (`SquidMascot`) is a hand-built inline SVG with a
+`mood` prop (`"idle" | "celebrate" | "sleeping"`) driving Framer-Motion
+animation (an idle bob under `mood="idle"`), all `useReducedMotion`-gated. The
+design spec's Lottie idle animation is deferred to Phase 11 polish; a CC0
+Lottie can replace the component internals later without touching any consumer.
+Why: Hand-authoring a Lottie JSON now would be fragile and slow to iterate;
+the SVG gives the same interface and ships immediately.
+Affects: Phase 11 polish may swap the mascot internals for a Lottie behind the
+unchanged `mood` prop.
+
+## [Phase 5] No Vite dev proxy
+Decided: The frontend talks to the backend directly — REST via `VITE_API_URL`
+(default `http://localhost:8000`), WS via `VITE_WS_URL` (default `ws://
+localhost:8000/ws/predict`) — both resolved once in `src/lib/config.ts` and
+nowhere else. No `server.proxy` entry in `vite.config.ts`.
+Why: The Phase 4 backend's CORS already allows `http://localhost:5173`, so a
+dev proxy adds a layer with no benefit, and centralising env access in one
+module keeps `import.meta.env` from scattering.
+Affects: Phase 9/10 configure the deployed URLs through these two env vars; any
+new backend call reads its base URL from `config.ts`.
