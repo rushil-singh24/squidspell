@@ -46,9 +46,10 @@ def test_ws_emits_one_message_per_frame_with_schema(ws_app):
     assert set(msg) == {
         "prediction", "confidence", "source", "static_label",
         "static_confidence", "motion_active", "fps", "timestamp", "client_timestamp",
-        "transcript",
+        "transcript", "race",
     }
     assert msg["transcript"] is None
+    assert "race" in msg and msg["race"] is None
     assert msg["static_label"] == "A"
     assert msg["static_confidence"] == 0.95
     assert msg["motion_active"] is False
@@ -131,10 +132,11 @@ def test_ws_train_mode_makes_transcript_a_string(ws_app, monkeypatch):
             msg = ws.receive_json()
             assert msg["transcript"] == ""
 
-            # space on an empty transcript is a no-op (no leading space)
+            # space on an empty transcript is a no-op (no leading space);
+            # unchanged text -> change-only delivery emits None
             ws.send_json({"action": "space"})
             ws.send_json({"landmarks": None})
-            assert ws.receive_json()["transcript"] == ""
+            assert ws.receive_json()["transcript"] is None
 
             # drive a real commit of "A"
             transcripts = []
@@ -197,4 +199,121 @@ def test_ws_connections_are_isolated(ws_app, monkeypatch):
             ws1.send_json({"action": "space"})
             t1 = send_frame(ws1)["transcript"]
             t2 = send_frame(ws2)["transcript"]
-            assert t1 == "A " and t2 == "A", (t1, t2)
+            # ws1's transcript changed ("A" -> "A ") so it re-emits; ws2's is
+            # unchanged, so change-only delivery emits None (NOT "A " -> proves
+            # ws1's mutation did not leak into ws2's TranscriptBuilder).
+            assert t1 == "A " and t2 is None, (t1, t2)
+
+
+# --- Phase 7: race branch + change-only delivery ------------------------
+
+
+def test_ws_race_snapshot_appears_on_start(ws_app):
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "race"})
+            ws.send_json({"race": "start", "duration": 15})
+            ws.send_json({"landmarks": None})
+            msg = ws.receive_json()
+    assert isinstance(msg["race"], dict)
+    assert msg["race"]["phase"] == "running"
+    assert isinstance(msg["race"]["target_word"], str) and msg["race"]["target_word"]
+
+
+def test_ws_race_expiry_produces_results(ws_app, monkeypatch):
+    # 5s per monotonic() call: a few frames after start push past the 15s
+    # duration so tick() finalises. (Starlette's TestClient itself consumes
+    # monotonic() ticks, so tests assert phases, not exact tick arithmetic.)
+    ticks = iter(range(0, 100_000_000, 5_000))
+    monkeypatch.setattr("app.main.time.monotonic", lambda: next(ticks) / 1000.0)
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "race"})
+            ws.send_json({"race": "start", "duration": 15})
+            race = None
+            for _ in range(12):
+                ws.send_json({"landmarks": None})
+                r = ws.receive_json()["race"]
+                if r is not None:
+                    race = r
+                if race is not None and race["phase"] == "finished":
+                    break
+    assert race is not None and race["phase"] == "finished"
+    assert set(race["results"]) >= {"spm", "accuracy", "consistency"}
+
+
+def test_ws_race_finished_snapshot_is_stable_and_not_resent(ws_app, monkeypatch):
+    ticks = iter(range(0, 100_000_000, 5_000))
+    monkeypatch.setattr("app.main.time.monotonic", lambda: next(ticks) / 1000.0)
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "race"})
+            ws.send_json({"race": "start", "duration": 15})
+            finished_seen = False
+            for _ in range(12):
+                ws.send_json({"landmarks": None})
+                r = ws.receive_json()["race"]
+                if r is not None and r["phase"] == "finished":
+                    finished_seen = True
+                    break
+            assert finished_seen
+            # race is finished; its snapshot is now stable across frames, so
+            # change-only delivery must stop re-sending it.
+            for _ in range(5):
+                ws.send_json({"landmarks": None})
+                assert ws.receive_json()["race"] is None
+
+
+def test_ws_bad_race_command_errors_keep_open(ws_app):
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "race"})
+            ws.send_json({"race": "start"})  # no duration
+            assert "error" in ws.receive_json()
+            ws.send_json({"race": "start", "duration": 99})  # bad duration
+            assert "error" in ws.receive_json()
+            ws.send_json({"race": "boom"})  # unknown command
+            assert "error" in ws.receive_json()
+            ws.send_json({"landmarks": None})
+            ok = ws.receive_json()
+            assert "error" not in ok and ok["static_label"] is None
+
+
+def test_ws_race_and_transcript_null_in_wrong_mode(ws_app, monkeypatch):
+    ticks = iter(range(0, 200_000, 40))
+    monkeypatch.setattr("app.main.time.monotonic", lambda: next(ticks) / 1000.0)
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "race"})
+            ws.send_json({"race": "start", "duration": 15})
+            for _ in range(6):
+                ws.send_json({"landmarks": _frame()})
+                assert ws.receive_json()["transcript"] is None
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "train"})
+            for _ in range(6):
+                ws.send_json({"landmarks": _frame()})
+                assert ws.receive_json()["race"] is None
+
+
+def test_ws_transcript_change_only(ws_app, monkeypatch):
+    ticks = iter(range(0, 40_000, 40))
+    monkeypatch.setattr("app.main.time.monotonic", lambda: next(ticks) / 1000.0)
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "train"})
+            ws.send_json({"landmarks": None})
+            assert ws.receive_json()["transcript"] == ""  # first frame carries ""
+            ws.send_json({"landmarks": None})
+            assert ws.receive_json()["transcript"] is None  # unchanged
+            ws.send_json({"action": "space"})  # no-op on empty
+            ws.send_json({"landmarks": None})
+            assert ws.receive_json()["transcript"] is None
+            seen = []
+            for _ in range(60):
+                ws.send_json({"landmarks": _frame()})
+                seen.append(ws.receive_json()["transcript"])
+    assert "A" in seen
+    i = seen.index("A")
+    assert any(s is None for s in seen[i + 1:])  # unchanged frames after commit
+    assert "A" not in seen[i + 1:]  # committed text not re-emitted

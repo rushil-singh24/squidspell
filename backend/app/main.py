@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.prediction import PredictionService
+from app.race import RACE_DURATIONS, RaceState
 from app.transcript import TranscriptBuilder, VALID_ACTIONS
 
 _FPS_WINDOW_SECONDS = 1.0
@@ -93,6 +94,9 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
         recv_times: deque[float] = deque()
         mode: str | None = None
         transcript: TranscriptBuilder | None = None
+        race: RaceState | None = None
+        _last_transcript_sent: str | None = None
+        _last_race_sent: dict | None = None
         try:
             while True:
                 try:
@@ -122,6 +126,9 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
                         continue
                     mode = new_mode
                     transcript = TranscriptBuilder() if mode == "train" else None
+                    race = RaceState() if mode == "race" else None
+                    _last_transcript_sent = None
+                    _last_race_sent = None
                     continue
                 if "action" in msg:
                     action = msg["action"]
@@ -133,6 +140,26 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
                         continue
                     if transcript is not None:
                         transcript.apply(action)
+                    continue
+                if "race" in msg:
+                    cmd = msg["race"]
+                    if cmd == "start":
+                        duration = msg.get("duration")
+                        if race is None or duration not in RACE_DURATIONS:
+                            await websocket.send_json({
+                                "error": "bad race command",
+                                "timestamp": int(time.time() * 1000),
+                            })
+                            continue
+                        race.start(duration, time.monotonic() * 1000.0)
+                    elif cmd == "stop":
+                        if race is not None:
+                            race.stop()
+                    else:
+                        await websocket.send_json({
+                            "error": "unknown race command",
+                            "timestamp": int(time.time() * 1000),
+                        })
                     continue
 
                 raw = msg.get("landmarks")
@@ -152,8 +179,24 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
 
                 result = engine.process_frame(_to_tuples(raw), now_mono * 1000.0)
 
+                now_ms = now_mono * 1000.0
                 if transcript is not None and result.committed_letter is not None:
-                    transcript.commit_letter(result.committed_letter, now_mono * 1000.0)
+                    transcript.commit_letter(result.committed_letter, now_ms)
+                if race is not None:
+                    if result.committed_letter is not None:
+                        race.commit_letter(result.committed_letter, now_ms)
+                    race.tick(now_ms)
+
+                transcript_out = None
+                if transcript is not None and transcript.text != _last_transcript_sent:
+                    transcript_out = transcript.text
+                    _last_transcript_sent = transcript.text
+                race_out = None
+                if race is not None:
+                    snap = race.snapshot(now_ms)
+                    if snap != _last_race_sent:
+                        race_out = snap
+                        _last_race_sent = snap
 
                 await websocket.send_json({
                     "prediction": result.committed_letter,
@@ -165,7 +208,8 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
                     "fps": fps,
                     "timestamp": int(time.time() * 1000),
                     "client_timestamp": client_ts,
-                    "transcript": transcript.text if transcript is not None else None,
+                    "transcript": transcript_out,
+                    "race": race_out,
                 })
         except WebSocketDisconnect:
             return

@@ -116,11 +116,14 @@ class RaceState:
             seconds_left = max(
                 0, math.ceil((self._duration_ms - (now_ms - self._start_ms)) / 1000)
             )
-            elapsed_min = max(
-                1e-9,
-                (min(now_ms, self._start_ms + self._duration_ms) - self._start_ms) / 60000,
+            # Quantize the running spm to whole elapsed seconds so change-only
+            # delivery emits a race update ~1x/sec (matching seconds_left) rather
+            # than on nearly every frame once the racer has signed a letter.
+            elapsed_s = max(
+                1,
+                int((min(now_ms, self._start_ms + self._duration_ms) - self._start_ms) / 1000),
             )
-            spm = round(self._correct / elapsed_min) if self._correct > 0 else 0
+            spm = round(self._correct / (elapsed_s / 60)) if self._correct > 0 else 0
         else:
             target_word = None
             upcoming = []
