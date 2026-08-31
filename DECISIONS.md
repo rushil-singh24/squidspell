@@ -240,6 +240,15 @@ only the frame *source* (WebSocket vs. webcam) differs. That reuse from
 `sys.path`) step already called out in `[Phase 0] Python version and venv
 layout` — `ml/` has no `__init__.py` and uses bare sibling imports.
 
+## [Phase 3 follow-up] Trim idle frames before motion classification
+Resolved 2026-08-31 — `MotionGate` now trims leading/trailing near-stationary
+frames (`_trim_still`, `MOTION_STOP_VELOCITY` threshold) before calling
+`motion_predictor.predict`, so the classifier sees the gesture segment not the
+full rolling buffer; falls back to the full buffer if trimming leaves < 2
+frames. This closes the whole-branch Phase 3 review item where idle approach /
+idle hold padding shifted the mandatory 20-frame resample away from the
+training distribution and depressed borderline J/Z confidence.
+
 ## [Phase 3] WebSocket payload direction (recorded early for Phase 4)
 Decided: Deferred to Phase 4, but noting the constraint now: `live_demo.py`
 extracts landmarks client-side (in the demo process) and `InferenceEngine`

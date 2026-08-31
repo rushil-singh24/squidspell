@@ -98,6 +98,24 @@ def _velocity(buffer):
     return _dist(centroid(buffer[-2]), centroid(buffer[-1]))
 
 
+def _trim_still(frames, stop_velocity):
+    """Drop leading and trailing frames whose centroid barely moved relative to
+    their neighbour (idle approach / idle hold), so the motion classifier sees
+    the gesture segment rather than the whole rolling buffer. Returns the input
+    unchanged if trimming would leave fewer than 2 frames."""
+    n = len(frames)
+    if n < 3:
+        return frames
+    lo = 0
+    while lo + 1 < n and _dist(centroid(frames[lo]), centroid(frames[lo + 1])) < stop_velocity:
+        lo += 1
+    hi = n
+    while hi - 1 > lo and _dist(centroid(frames[hi - 1]), centroid(frames[hi - 2])) < stop_velocity:
+        hi -= 1
+    trimmed = frames[lo:hi]
+    return trimmed if len(trimmed) >= 2 else frames
+
+
 class MotionGate:
     def __init__(
         self,
@@ -158,7 +176,7 @@ class MotionGate:
         window_full = len(buffer) >= self._buffer_len
         enough = len(buffer) - self._armed_at_len >= self._min_segment_frames
         if window_full or (stopped and enough):
-            label, conf = self._motion.predict(buffer)
+            label, conf = self._motion.predict(_trim_still(buffer, self._stop_velocity))
             self._armed = False
             self._armed_at_len = 0
             self._no_hand_streak = 0

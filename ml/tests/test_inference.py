@@ -278,6 +278,65 @@ def test_none_frame_never_commits_but_clock_survives_brief_dropout():
     assert sm.update("A", 140) == "A"        # lands on the next real-hand frame
 
 
+from inference import MOTION_STOP_VELOCITY, _trim_still
+
+
+def test_trim_still_keeps_all_moving_frames():
+    buf = _moving_buffer(12)
+    result = _trim_still(buf, MOTION_STOP_VELOCITY)
+    assert len(result) == 12
+
+
+def test_trim_still_drops_leading_still_frames():
+    buf = _still_buffer(6, 0.5, 0.5) + _moving_buffer(10, 0.2, 0.8)
+    result = _trim_still(buf, MOTION_STOP_VELOCITY)
+    assert len(result) < 16
+    # near-stationary approach frames are gone (at most the one boundary frame
+    # survives); the segment now begins in the moving section.
+    still_x = centroid(_hand_at(0.5, 0.5))[0]
+    leading_still = sum(1 for f in result if centroid(f)[0] == pytest.approx(still_x))
+    assert leading_still <= 1
+    assert centroid(result[-1])[0] == pytest.approx(centroid(_hand_at(0.8, 0.5))[0])
+
+
+def test_trim_still_drops_trailing_still_frames():
+    buf = _moving_buffer(10, 0.2, 0.8) + _still_buffer(6, 0.8, 0.5)
+    result = _trim_still(buf, MOTION_STOP_VELOCITY)
+    assert len(result) < 16
+    # last frame is a moving-section frame, not an idle hold frame
+    assert result[-1] == _moving_buffer(10, 0.2, 0.8)[-1]
+
+
+def test_trim_still_returns_fully_still_buffer_unchanged():
+    buf = _still_buffer(10)
+    result = _trim_still(buf, MOTION_STOP_VELOCITY)
+    # trimming would leave < 2 frames -> fall back to the whole buffer
+    assert result is buf
+
+
+def test_trim_still_returns_short_buffer_unchanged():
+    buf = _still_buffer(2)
+    assert _trim_still(buf, MOTION_STOP_VELOCITY) is buf
+
+
+def test_gate_trims_idle_frames_before_classifying():
+    class _LenSpy:
+        def __init__(self):
+            self.lengths = []
+
+        def predict(self, frames):
+            self.lengths.append(len(frames))
+            return ("negative", 0.1)
+
+    spy = _LenSpy()
+    gate = MotionGate(_ScriptedStatic("I", 0.9), spy)
+    gate.update(_moving_buffer(10), hand_present=True, now_ms=0)          # arm
+    buf = _moving_buffer(8) + _still_buffer(8, cx=0.8, cy=0.5)            # 16 frames, 8 idle hold
+    gate.update(buf, hand_present=False, now_ms=100)                     # stopped -> classify
+    assert spy.lengths == [8]
+    assert spy.lengths[0] < 16
+
+
 def test_gate_abandons_when_hand_gone_for_consecutive_frames():
     gate = MotionGate(_ScriptedStatic("I", 0.9), _ScriptedMotion("J", 0.9))
     gate.update(_moving_buffer(10), hand_present=True, now_ms=0)   # arm
