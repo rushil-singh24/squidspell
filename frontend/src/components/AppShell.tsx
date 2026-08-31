@@ -6,7 +6,7 @@ import { ModeToggle } from './ModeToggle'
 import { ThemeToggle } from './ThemeToggle'
 import { PanelSwap } from '../motion/PanelSwap'
 import { TrainPane } from '../modes/TrainPane'
-import { RacePanePlaceholder } from '../modes/RacePanePlaceholder'
+import { RacePane } from '../modes/RacePane'
 import type { Mode } from '../types'
 
 export function AppShell() {
@@ -56,7 +56,7 @@ export function AppShell() {
                 onAction={prediction.sendAction}
               />
             ) : (
-              <RacePanePlaceholder />
+              <RacePane />
             )}
           </PanelSwap>
         </div>

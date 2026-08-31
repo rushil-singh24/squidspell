@@ -23,8 +23,11 @@ const mockPrediction = {
   sendLandmarks: vi.fn(),
   onCommit: vi.fn(() => () => {}),
   transcript: '',
+  race: null,
   setMode: vi.fn(),
   sendAction: vi.fn(),
+  startRace: vi.fn(),
+  stopRace: vi.fn(),
 }
 
 vi.mock('../hooks/usePrediction', () => ({
@@ -37,9 +40,12 @@ vi.mock('./WebcamPane', () => ({
 
 beforeEach(() => {
   mockPrediction.lastError = null
+  mockPrediction.race = null
   mockPrediction.sendLandmarks.mockClear()
   mockPrediction.setMode.mockClear()
   mockPrediction.sendAction.mockClear()
+  mockPrediction.startRace.mockClear()
+  mockPrediction.stopRace.mockClear()
   vi.mocked(useHandLandmarker).mockClear()
 })
 
@@ -53,7 +59,9 @@ describe('AppShell', () => {
     expect(screen.getByText(/Sign a letter to start/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Race' }))
-    expect(await screen.findByText(/Race mode/)).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', { name: /start/i }),
+    ).toBeInTheDocument()
   })
 
   it('shows a dismissible error toast for a prediction error', async () => {
