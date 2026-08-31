@@ -26,6 +26,11 @@ export function HoldButton({
   const reduce = useReducedMotion()
   const [progress, setProgress] = useState(0)
 
+  // Read the live `disabled` inside the rAF/interval loop, whose `frame`
+  // closure would otherwise be pinned to the render that started the hold.
+  const disabledRef = useRef(disabled)
+  disabledRef.current = disabled
+
   const startRef = useRef<number | null>(null)
   const rafRef = useRef<number | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -68,6 +73,12 @@ export function HoldButton({
   // (completed or aborted) and must not be rescheduled.
   function frame(): boolean {
     if (!mountedRef.current || startRef.current === null) return true
+    // A button disabled mid-hold stops emitting pointerup/pointerleave, so
+    // abort here rather than letting the hold silently complete.
+    if (disabledRef.current) {
+      reset()
+      return true
+    }
     const p = Math.min(1, (performance.now() - startRef.current) / durationMs)
     setProgress(p)
     if (p >= 1) {

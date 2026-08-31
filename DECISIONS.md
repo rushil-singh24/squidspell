@@ -462,6 +462,15 @@ inference engine and inbound `{"action":"delete"|"space"|"clear"}` messages both
 mutate it, and every outbound prediction frame now carries `transcript: str |
 null` (the current text for a train connection, `null` otherwise). An unknown
 mode or action gets an `{"error": ...}` reply and the socket stays open.
+A `train→race` switch, a `race→train` switch, or a WebSocket reconnect starts a
+**fresh** transcript — the previous text is discarded server-side (a new
+`TranscriptBuilder`) and cleared client-side (`usePrediction.setMode` resets the
+local `transcript` string) — so a long-lived transcript must be Saved before
+switching modes. The `transcript` field is also currently re-sent in full on
+every outbound frame; Phase 7 should switch to change-only / versioned delivery
+when it adds race payload to the same envelope. `TranscriptBuilder` caps the
+text at `MAX_TRANSCRIPT_CHARS = 2000` (further committed letters are silently
+dropped) to bound that per-frame redundancy.
 Why: Chosen over a client-side transcript so the same pattern serves Phase 7's
 server-side Race scorer and matches the spec's "one FastAPI app, internal modules
 (prediction / transcript / race)". Keeping the transcript next to the engine that
@@ -480,9 +489,10 @@ Why: The inference layer already commits a letter only once per stable run
 changes), so a second dedupe layer here would be redundant — and a time window
 would swallow deliberate double letters (LL, SS, EE).
 Affects: Nothing downstream. Known limitation: two identical letters signed
-faster than the smoother can re-stabilise (~500 ms `STATIC_STABLE_MS`) merge
-into one — acceptable for v1; the fix, if ever needed, is a brief "letter
-released" gap requirement in the smoother, not a timer in `TranscriptBuilder`.
+faster than the smoother can re-stabilise in the *inference* layer (~500 ms
+`STATIC_STABLE_MS`) merge into one — acceptable for v1; the fix, if ever needed,
+is a brief "letter released" gap requirement in the smoother, not a timer in
+`TranscriptBuilder`.
 
 ## [Phase 6] `GESTURE_ACTIONS = {}` — control-gesture poses deferred
 Decided: `GESTURE_ACTIONS: dict[str, str]` in `transcript.py` is empty. Delete /

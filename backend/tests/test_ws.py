@@ -181,9 +181,20 @@ def test_ws_connections_are_isolated(ws_app, monkeypatch):
 
     with TestClient(ws_app) as c:
         with c.websocket_connect("/ws/predict") as ws1, c.websocket_connect("/ws/predict") as ws2:
+            ws1.send_json({"mode": "train"})
+            ws2.send_json({"mode": "train"})
+
             ws1_committed = any(send_frame(ws1)["prediction"] is not None for _ in range(25))
             assert ws1_committed, "ws1 should commit after its own stability window"
             # ws2 has its own fresh engine: it must reach its OWN first commit,
             # not inherit ws1's already-committed smoother state.
             ws2_committed = any(send_frame(ws2)["prediction"] is not None for _ in range(25))
             assert ws2_committed, "ws2 must commit independently — proves per-connection engine isolation"
+
+            # Both have committed "A" into their own TranscriptBuilder by now.
+            # Mutate exactly one socket's transcript and confirm the other's is
+            # untouched — per-connection TranscriptBuilder isolation.
+            ws1.send_json({"action": "space"})
+            t1 = send_frame(ws1)["transcript"]
+            t2 = send_frame(ws2)["transcript"]
+            assert t1 == "A " and t2 == "A", (t1, t2)

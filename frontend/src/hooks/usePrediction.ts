@@ -40,10 +40,13 @@ export function usePrediction(url: string = WS_URL) {
     (l: number[][] | null) => clientRef.current?.send(l),
     [],
   )
-  const setMode = useCallback(
-    (m: 'train' | 'race' | null) => clientRef.current?.setMode(m),
-    [],
-  )
+  const setMode = useCallback((m: 'train' | 'race' | null) => {
+    // The server drops/recreates its TranscriptBuilder on every mode change
+    // and reconnect, so the previous transcript is gone server-side. Clear the
+    // local copy too, otherwise stale text lingers when frames have stopped.
+    setTranscript('')
+    clientRef.current?.setMode(m)
+  }, [])
   const sendAction = useCallback(
     (a: TranscriptAction) => clientRef.current?.sendAction(a),
     [],

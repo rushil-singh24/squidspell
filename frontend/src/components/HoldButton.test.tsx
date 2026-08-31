@@ -83,6 +83,23 @@ describe('HoldButton', () => {
     expect(onHoldComplete).not.toHaveBeenCalled()
   })
 
+  it('aborts an in-progress hold when it becomes disabled mid-hold', () => {
+    const onHoldComplete = vi.fn()
+    const { rerender } = render(
+      <HoldButton onHoldComplete={onHoldComplete}>Clear</HoldButton>,
+    )
+    fireEvent.pointerDown(screen.getByRole('button'))
+    flush(400)
+    rerender(
+      <HoldButton onHoldComplete={onHoldComplete} disabled>
+        Clear
+      </HoldButton>,
+    )
+    flush(1000)
+    flush(1000)
+    expect(onHoldComplete).not.toHaveBeenCalled()
+  })
+
   it('is operable via the Space key', () => {
     const onHoldComplete = vi.fn()
     render(<HoldButton onHoldComplete={onHoldComplete}>Clear</HoldButton>)

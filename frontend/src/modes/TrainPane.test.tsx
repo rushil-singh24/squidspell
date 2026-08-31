@@ -93,8 +93,7 @@ describe('TrainPane', () => {
     expect(after).toHaveLength(0)
   })
 
-  it('downloads the transcript as a text blob', async () => {
-    const user = userEvent.setup()
+  it('downloads the transcript as a text blob without leaking the anchor or revoking early', async () => {
     const createObjectURL = vi.fn((_blob: Blob) => 'blob:x')
     const revokeObjectURL = vi.fn()
     const click = vi.fn()
@@ -106,11 +105,36 @@ describe('TrainPane', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(click)
 
     render(<TrainPane transcript="HI" onAction={vi.fn()} />)
-    await user.click(screen.getByRole('button', { name: /download/i }))
+    // fireEvent (sync) so we can observe the state right after the handler runs
+    fireEvent.click(screen.getByRole('button', { name: /download/i }))
 
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(Blob)
     expect(click).toHaveBeenCalled()
+    // anchor is cleaned out of the document
+    expect(document.querySelector('a[download]')).toBeNull()
+    // revoke is deferred, not synchronous (Firefox/Safari would cancel the download)
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    await new Promise((r) => setTimeout(r, 0))
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:x')
+  })
+
+  it('degrades to an empty history when stored JSON has the wrong shape', async () => {
+    const user = userEvent.setup()
+    for (const bad of ['{"a":1}', '[1,2,3]']) {
+      localStorage.setItem('squidspell-train-history', bad)
+      const { unmount } = render(<TrainPane transcript="HI" onAction={vi.fn()} />)
+      // renders without throwing; no history list present
+      expect(screen.queryByRole('list')).toBeNull()
+      await user.click(screen.getByRole('button', { name: /^save$/i }))
+      const stored = JSON.parse(
+        localStorage.getItem('squidspell-train-history') ?? 'null',
+      )
+      expect(Array.isArray(stored)).toBe(true)
+      expect(stored).toHaveLength(1)
+      expect(stored[0]).toMatchObject({ text: 'HI' })
+      unmount()
+      localStorage.clear()
+    }
   })
 })

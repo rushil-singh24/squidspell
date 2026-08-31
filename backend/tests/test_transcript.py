@@ -1,5 +1,10 @@
 import pytest
-from app.transcript import TranscriptBuilder, VALID_ACTIONS, GESTURE_ACTIONS
+from app.transcript import (
+    MAX_TRANSCRIPT_CHARS,
+    TranscriptBuilder,
+    VALID_ACTIONS,
+    GESTURE_ACTIONS,
+)
 
 
 def test_commit_letters_appends_uppercase():
@@ -35,6 +40,21 @@ def test_delete_space_clear():
     assert b.apply("clear") is False                          # no-op on empty
     assert b.apply("delete") is False                         # no-op on empty
     assert b.apply("space") is False                          # no leading space
+
+
+def test_empty_letter_is_a_no_op():
+    b = TranscriptBuilder()
+    assert b.commit_letter("", 1) is False
+    assert b.text == ""
+
+
+def test_transcript_length_is_capped():
+    b = TranscriptBuilder()
+    last = True
+    for i in range(MAX_TRANSCRIPT_CHARS + 10):
+        last = b.commit_letter("a", i)
+    assert len(b.text) == MAX_TRANSCRIPT_CHARS
+    assert last is False
 
 
 def test_apply_rejects_unknown_action():

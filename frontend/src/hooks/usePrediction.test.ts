@@ -93,6 +93,17 @@ describe('usePrediction', () => {
     expect(result.current.transcript).toBe('HI')
   })
 
+  it('clears the local transcript on a mode change', () => {
+    const { result } = renderHook(() => usePrediction('ws://test'))
+    act(() => FakeWS.last!._open())
+
+    act(() => FakeWS.last!._msg({ ...evt, transcript: 'HI' }))
+    expect(result.current.transcript).toBe('HI')
+
+    act(() => result.current.setMode('race'))
+    expect(result.current.transcript).toBe('')
+  })
+
   it('setMode and sendAction call through to the client', () => {
     const { result } = renderHook(() => usePrediction('ws://test'))
     act(() => FakeWS.last!._open())

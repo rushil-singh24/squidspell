@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { CommitPop } from '../motion/CommitPop'
 import { SquidMascot } from '../components/SquidMascot'
@@ -12,7 +12,16 @@ type Saved = { id: string; text: string; savedAt: number }
 function loadHistory(): Saved[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY)
-    return raw ? (JSON.parse(raw) as Saved[]) : []
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (e): e is Saved =>
+        !!e &&
+        typeof e === 'object' &&
+        typeof (e as Saved).id === 'string' &&
+        typeof (e as Saved).text === 'string' &&
+        typeof (e as Saved).savedAt === 'number',
+    )
   } catch {
     return []
   }
@@ -96,7 +105,7 @@ const historyItem: CSSProperties = {
   color: 'var(--sq-fg-muted)',
 }
 
-export function TrainPane({
+export const TrainPane = memo(function TrainPane({
   transcript,
   onAction,
 }: {
@@ -125,7 +134,9 @@ export function TrainPane({
   function onSave() {
     persist([
       {
-        id: crypto.randomUUID?.() ?? String(Date.now()),
+        id:
+          crypto.randomUUID?.() ??
+          `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         text: transcript,
         savedAt: Date.now(),
       },
@@ -134,13 +145,14 @@ export function TrainPane({
   }
 
   function onDownload() {
-    const blob = new Blob([transcript], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
+    const url = URL.createObjectURL(new Blob([transcript], { type: 'text/plain' }))
     const a = document.createElement('a')
     a.href = url
     a.download = 'squidspell-transcript.txt'
+    document.body.appendChild(a)
     a.click()
-    URL.revokeObjectURL(url)
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   const head = transcript.slice(0, -1)
@@ -238,4 +250,4 @@ export function TrainPane({
       )}
     </div>
   )
-}
+})

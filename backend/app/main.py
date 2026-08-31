@@ -115,7 +115,10 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
                 if "mode" in msg:
                     new_mode = msg["mode"]
                     if new_mode not in (None, "train", "race"):
-                        await websocket.send_json({"error": "unknown mode", "timestamp": int(time.time() * 1000)})
+                        await websocket.send_json({
+                            "error": "unknown mode",
+                            "timestamp": int(time.time() * 1000),
+                        })
                         continue
                     mode = new_mode
                     transcript = TranscriptBuilder() if mode == "train" else None
@@ -123,7 +126,10 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
                 if "action" in msg:
                     action = msg["action"]
                     if action not in VALID_ACTIONS:
-                        await websocket.send_json({"error": "unknown action", "timestamp": int(time.time() * 1000)})
+                        await websocket.send_json({
+                            "error": "unknown action",
+                            "timestamp": int(time.time() * 1000),
+                        })
                         continue
                     if transcript is not None:
                         transcript.apply(action)
