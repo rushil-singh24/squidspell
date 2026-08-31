@@ -1,27 +1,35 @@
 # SquidSpell — Handoff
 
-**Last updated:** Phase 6 (Mode A: Train) code + documentation complete and committed
-(2026-08-30). `/ws/predict` is now mode-aware: the client sends `{"mode":"train"|"race"|null}`
-(re-sent on reconnect) and `{"action":"delete"|"space"|"clear"}`; a `train` connection keeps a
-per-connection `TranscriptBuilder` (`backend/app/transcript.py`, pure) fed by committed letters
-+ actions, and every outbound frame carries `transcript: str | null`. On the frontend,
-`PredictionClient`/`usePrediction` expose `transcript` / `setMode` / `sendAction`, and
-`frontend/src/modes/TrainPane.tsx` (replacing `TrainPanePlaceholder`) renders an auto-scrolling
-transcript panel (`CommitPop` on the newest char), instant `␣ Space` / `⌫ Delete` buttons, a
-`Clear (hold)` control (`HoldButton`, ~1s press-and-hold with a fill indicator, keyboard-operable),
-Save / Download, and a client-only history in `localStorage["squidspell-train-history"]`, with a
-`SquidMascot` empty state. Gates all green: `cd backend && python -m pytest tests/ -q` (**36**)
-and `cd frontend && npm run lint && npm test && npm run build` (**67 tests**). Run:
+**Last updated:** Phase 7 (Mode B: Race) code + documentation complete and committed
+(2026-08-30). `/ws/predict` now also handles `mode == "race"`: the connection keeps a
+per-connection `RaceState` (`backend/app/race.py`, pure) alongside the engine, driven by inbound
+`{"race":"start","duration":15|30|60}` / `{"race":"stop"}` (a bad or unknown `race` message →
+`{"error": ...}`, socket stays open); committed letters are matched against the current target
+word server-side, and `RaceState.tick` runs every frame so a round finalises on expiry without a
+client `stop`. `transcript` and `race` are now **change-only** in the outbound frame — the
+current value on the first frame each changes, `null` on frames where it did not, and the client
+keeps its last non-null value; `RaceState.snapshot()` integer-rounds `spm` and `seconds_left` so
+a steady race yields equal snapshot dicts. On the frontend, `PredictionClient`/`usePrediction`
+expose `race` + `startRace(d)` / `stopRace()`, and `frontend/src/modes/RacePane.tsx` (replacing
+`RacePanePlaceholder`) renders the pre-race 15/30/60 picker + "Best: N SPM", the running HUD
+(`{seconds_left}s`, `SPM {spm}`, `RaceWordStream` MonkeyType-style word display, Stop), and the
+results screen (SPM / accuracy% / consistency, a brief `SquidMascot mood="celebrate"`, Try
+Again), with a per-duration personal best in `localStorage["squidspell-race-bests"]`
+(shape-validated). Gates all green: `cd backend && python -m pytest tests/ -q` (**53**) and
+`cd frontend && npm run lint && npm test && npm run build` (**85 tests**). Run:
 `cd frontend && npm run dev` → http://localhost:5173 (needs the Phase 4 backend on `:8000` for
-live predictions; the shell still renders without it). `TrainPanePlaceholder` is gone;
-`RacePanePlaceholder` remains for Phase 7. See `frontend/README.md` and the `[Phase 6]` entries
-in `DECISIONS.md`.
-**Three human passes are owed:** (1) the Phase 3 `python ml/live_demo.py` webcam verification —
-still pending, confirm all 26 letters incl. J/Z before Phase 3 formally closes; (2) the Phase 5
+live predictions; the shell still renders without it). `RacePanePlaceholder` is gone — both mode
+panes (`TrainPane`, `RacePane`) are real now. See `frontend/README.md` and the `[Phase 7]`
+entries in `DECISIONS.md`.
+**Human passes owed:** (1) the Phase 3 `python ml/live_demo.py` webcam verification — still
+pending, confirm all 26 letters incl. J/Z before Phase 3 formally closes; (2) the Phase 5
 visual / animation / allow-camera look (the shell has never been rendered in a real browser with
-a real webcam); and (3) a new Phase 6 end-to-end pass — with `cd frontend && npm run dev` and
-the backend running, a human signs a short word and confirms the transcript accumulates
-correctly and the Space / Delete / hold-to-Clear / Save / Download controls all work.
+a real webcam); (3) the Phase 3 motion-buffer follow-up (`MOTION_MOVEMENT_THRESHOLD` /
+`MOTION_STOP_VELOCITY` tuning at a real framerate — see `DECISIONS.md`'s `[Phase 3]` entry);
+(4) the Phase 6 end-to-end pass — with `cd frontend && npm run dev` and the backend running, a
+human signs a short word and confirms the transcript accumulates correctly and the Space /
+Delete / hold-to-Clear / Save / Download controls all work; and (5) a new Phase 7 pass — race a
+real 30s round and sanity-check that the SPM / accuracy / consistency numbers look plausible.
 
 **Resume from cold (fresh clone or new machine):**
 ```bash
@@ -130,12 +138,17 @@ outbound frame) are committed; the frontend `TrainPane`, `HoldButton`, and the
 `[Phase 6]` entries in `DECISIONS.md` for the server-authoritative-transcript call, the
 no-time-window-dedupe rule, the deferred control gestures, hold-to-Clear, and client-only history.
 
-**Phase 7 (Mode B: Race) is next.** Race adds a `race` branch to the same `/ws/predict` mode
-switch plus a `backend/app/race.py` scorer that attaches to the same per-connection engine, and
-replaces `frontend/src/modes/RacePanePlaceholder.tsx` via the `AppShell` import. It reads
-`lastEvent` / `status` / `transcript` from the existing `usePrediction` hook (no second socket)
-and reuses the `src/motion/` primitives. The Phase 4 backend, the Phase 5 shell, and the Phase 6
-transcript plumbing are all ready.
+**Phase 8 (Auth & Persistence — Supabase) is next, and it has an explicit human-setup gate
+BEFORE any agent work can start.** The human must, up front: (1) create a Supabase project and
+copy its Project URL + anon key into `frontend/.env`; and (2) create a Google Cloud OAuth client
+(type: Web application), add Supabase's callback URL to its authorised redirect URIs, and paste
+the resulting client ID + secret into Supabase's Google auth provider settings. The exact
+click-path is in the Phase 8 section of
+`docs/superpowers/specs/2026-08-08-squidspell-full-phases.md`. No payment card is required for
+either. Only once those exist can agent work on Phase 8 begin — it swaps the client-only
+`localStorage` stores (`squidspell-train-history`, `squidspell-race-bests`) for Supabase tables
+(auth + `transcripts` + `race_results`, plus an optional public leaderboard), reading
+`usePrediction().transcript` and `usePrediction().race.results` as the sources.
 
 **Known minor follow-ups (non-blocking, deferred from Phase 0's reviews):**
 - ~~Unused Vite-scaffold demo assets and the default `frontend/README.md`~~ —
@@ -178,8 +191,10 @@ per phase so neither is a surprise mid-build.
   word and confirm the transcript accumulates correctly and the Space / Delete /
   hold-to-Clear / Save / Download controls all work. (Control gestures are not
   wired this phase — `GESTURE_ACTIONS = {}`, poses TBD; see `DECISIONS.md`.)
-- **Phase 7 — Race mode:** same — needs a human actually racing to verify
-  scoring.
+- **Phase 7 — Race mode:** code done (server-side `RaceState` scorer, `RacePane`
+  renders picker / HUD / results, 53 backend + 85 frontend tests green). Needs a
+  human actually racing a real 30s round to verify scoring — sanity-check that the
+  SPM / accuracy / consistency numbers on the results screen look plausible.
 - **Phase 8 — Auth & Persistence:** explicit human setup required *before*
   any agent work can start on this phase — create a Supabase account/project
   (get the Project URL + anon key), and separately set up a Google Cloud
@@ -204,6 +219,10 @@ MediaPipe skeleton overlay, `/ws/predict` readout, Train/Race nav, theme, and mo
 (45 tests green); one visual + camera-permission pass owed. **Phase 6 (Mode A: Train) is complete
 as of 2026-08-30** — `/ws/predict` is mode-aware, `backend/app/transcript.py` builds the Train
 transcript server-side, and `frontend` `TrainPane` renders it (36 backend + 67 frontend tests
-green); one end-to-end human pass owed. **Phase 7 (Mode B: Race) is unblocked** and can proceed
-immediately — it adds a `race` branch to the same `/ws/predict` mode switch plus
-`backend/app/race.py`, and swaps `frontend/src/modes/RacePanePlaceholder.tsx`.
+green); one end-to-end human pass owed. **Phase 7 (Mode B: Race) is complete as of 2026-08-30**
+— `/ws/predict` handles `mode == "race"` with a server-side `RaceState` scorer, `transcript` and
+`race` are change-only in the frame, and `frontend` `RacePane` renders the picker / word-stream
+HUD / results with local personal bests (53 backend + 85 frontend tests green); one human racing
+pass owed. **Phase 8 (Auth & Persistence — Supabase) is next but blocked on human setup** —
+a Supabase project and a Google Cloud OAuth client must exist before any agent work (see above
+and the Phase 8 section of `docs/superpowers/specs/2026-08-08-squidspell-full-phases.md`).

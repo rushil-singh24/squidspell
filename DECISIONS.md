@@ -533,3 +533,79 @@ backend store now would be throwaway work.
 Affects: Phase 8 replaces this with direct Supabase persistence (auth + a
 `transcripts` table); the `localStorage` key and shape are the migration
 starting point.
+
+## [Phase 7] Server-authoritative Race on the same `/ws/predict` mode switch as Train
+Decided: `mode == "race"` gives the connection a per-connection `RaceState`
+(`backend/app/race.py`, pure) alongside the existing engine, exactly parallel to
+Train's `TranscriptBuilder`. Inbound `{"race":"start","duration":15|30|60}` starts
+a round (any other duration → `ValueError` → `{"error": ...}`, socket stays open)
+and `{"race":"stop"}` ends one early; a bad or unknown `race` message gets an
+`{"error": ...}` reply and the socket stays open. Committed letters from the
+inference engine are matched against the current target word server-side — a
+correct letter grows the round's `typed`/`correct` counts, a completed word
+advances the queue (which auto-extends so `upcoming` never empties), and a wrong
+letter counts as an attempt without advancing. `RaceState.tick(now_ms)` runs on
+every frame and finalises the round on expiry, so a race ends and produces its
+`results` even if the client never sends `{"race":"stop"}` (the client streams
+frames continuously). `snapshot(now_ms)` returns the `RaceSnapshot` dict carried
+on the outbound frame.
+Why: Chosen over a client-side timer/scorer so scoring can't be gamed and so the
+same mode-switch pattern serves both game modes — matching the spec's "one FastAPI
+app, internal modules (prediction / transcript / race)". Keeping the scorer next
+to the engine that produces the commits avoids a second source of truth for what
+has been signed.
+Affects: Phase 8 persists `race_results` from `usePrediction().race.results`; the
+client transport layer needed only a `sendRace('start'|'stop', duration?)`
+addition, no second socket.
+
+## [Phase 7] Change-only `transcript` + `race` in the per-frame envelope
+Decided: Both `transcript` and `race` in the outbound prediction frame are now
+change-only (this closes the delivery item deferred from Phase 6). Each field
+carries its current value on the first frame it changes and `null` on every frame
+where it did not change; the client keeps its last non-null value for each.
+Per-connection `_last_transcript_sent` / `_last_race_sent` trackers hold the last
+value emitted and are reset on a mode-switch message so the next frame re-emits
+full state (which is also what makes a reconnect recover — `onopen` re-sends
+`mode`). To make change detection effective, `RaceState.snapshot()` integer-rounds
+the running `spm` (computed from whole elapsed seconds) and `seconds_left`, so a
+steady race produces byte-identical snapshot dicts frame to frame and only a real
+change re-sends the payload.
+Why: Two stateful payloads now share one envelope; re-sending both in full on
+every frame (~30/s) is wasteful, and the transcript can be up to
+`MAX_TRANSCRIPT_CHARS` long. Change-only keeps the frame small without a version
+counter.
+Affects: Any future per-connection stateful field on this frame follows the same
+pattern (a `_last_*_sent` tracker, reset on mode switch, `null` when unchanged).
+
+## [Phase 7] Consistency metric = `100 * (1 - CoV)`
+Decided: The results screen's "consistency" number is `100 * (1 - CoV)` where
+`CoV = pstdev(inter-letter gaps) / mean(gaps)` over the timestamps of the letters
+signed during the round, clamped to 0..100, and `0.0` when fewer than 2 letters
+were signed. 100 means a perfectly even signing cadence; a jittery cadence pulls
+it down. It is displayed as a number out of 100.
+Why: A single dimensionless evenness score is more legible than raw gap variance
+and is duration-independent, so it reads the same for a 15s and a 60s round.
+Affects: `frontend/README.md`'s Race-mode section documents it; Phase 8's
+`race_results` schema stores it as a number.
+
+## [Phase 7] Personal bests are client-only
+Decided: Best SPM per duration lives only in the browser, in
+`localStorage["squidspell-race-bests"]` as `{15,30,60 → SPM}`. It is
+shape-validated on load — a plain object whose present values are numbers,
+anything else falls back to `{}` — and a finished round writes its bucket only
+when it beats the stored value.
+Why: Bests are a per-device convenience this phase, not shared or authoritative
+data; a backend store now would be throwaway work.
+Affects: Phase 8 replaces this with a Supabase `race_results` table (and an
+optional public leaderboard); the `localStorage` key and shape are the migration
+starting point.
+
+## [Phase 7] Word pool is a static curated list
+Decided: `RACE_WORDS` in `backend/app/race.py` is a hand-picked list of ~40
+common lowercase English words 2-5 letters long. A round starts from a shuffled
+copy (seedable for tests) and the queue auto-extends by reshuffling and appending
+whenever it nears its end, so `upcoming` never empties for any duration.
+Why: A curated short-word list keeps rounds fingerspelling-friendly and avoids a
+dictionary dependency or generation logic for v1.
+Affects: Phase 8 optionally swaps this for a Supabase-backed word list; the
+`RaceState` queue interface stays the same.

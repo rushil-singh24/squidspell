@@ -79,9 +79,25 @@ clicking) are **not wired yet** — the poses will be chosen during a future
 data-collection pass so they stay visually distinct from the 26 letters. See
 `DECISIONS.md`'s `[Phase 6]` entries.
 
-## What's stubbed
+## Race mode
 
-`src/modes/RacePanePlaceholder.tsx` is an exported placeholder for the
-right-hand pane in Race mode. Phase 7 replaces it by swapping the import in
-`src/components/AppShell.tsx` — the same way Phase 6 replaced the Train
-placeholder with `src/modes/TrainPane.tsx`.
+The right-hand pane in Race mode (`src/modes/RacePane.tsx`) is a timed
+fingerspelling sprint:
+
+- Pick **15 / 30 / 60 seconds**, then **Start**.
+- Sign the highlighted word one letter at a time, MonkeyType-style — done
+  letters, the cursor, and pending letters are marked as you go, with the next
+  few words dimmed ahead. A **wrong letter simply doesn't advance** — there is no
+  penalty beyond the time it costs you.
+- The HUD shows the **seconds remaining** and a **live SPM** (Signs Per Minute).
+- At time-up: a **results screen** with SPM, **accuracy** (%), and **consistency**
+  (0-100 — how even your letter cadence was, `100 * (1 - CoV)` of the gaps
+  between letters; see the `[Phase 7]` entries in the repo's `DECISIONS.md`),
+  a brief squid celebration, and **Try Again**. Your best SPM per duration is
+  kept in this browser only (`localStorage`, this device — it is not sent
+  anywhere).
+
+Race and Train share the **same prediction engine and WebSocket** — the mode is
+just a `{"mode":"race"}` switch on the connection, and the round is scored
+server-side (`backend/app/race.py`). There is no second socket and no duplicated
+hand-tracking.
