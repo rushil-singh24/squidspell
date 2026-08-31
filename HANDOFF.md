@@ -194,7 +194,10 @@ per phase so neither is a surprise mid-build.
 - **Phase 7 — Race mode:** code done (server-side `RaceState` scorer, `RacePane`
   renders picker / HUD / results, 53 backend + 85 frontend tests green). Needs a
   human actually racing a real 30s round to verify scoring — sanity-check that the
-  SPM / accuracy / consistency numbers on the results screen look plausible.
+  SPM / accuracy / consistency numbers on the results screen look plausible. This
+  is ALSO the only check of RacePane's WebSocket wiring: the whole-branch review
+  caught RacePane briefly opening its own second socket, and every unit test mocks
+  `usePrediction`, so only a live race confirms the fix (`14ce74a`).
 - **Phase 8 — Auth & Persistence:** explicit human setup required *before*
   any agent work can start on this phase — create a Supabase account/project
   (get the Project URL + anon key), and separately set up a Google Cloud
