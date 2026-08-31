@@ -111,6 +111,21 @@ describe('PredictionClient', () => {
     })
   })
 
+  it('sendRace sends {race,duration} on start and {race} on stop, only when open', () => {
+    const c = new PredictionClient('ws://x', { WebSocketCtor: FakeWS as never })
+    c.connect()
+    c.sendRace('start', 30) // not open -> dropped
+    expect(FakeWS.last!.sent).toHaveLength(0)
+    FakeWS.last!._open()
+    c.sendRace('start', 30)
+    c.sendRace('stop')
+    const payloads = FakeWS.last!.sent.map((s) => JSON.parse(s))
+    expect(payloads).toContainEqual({ race: 'start', duration: 30 })
+    expect(payloads).toContainEqual({ race: 'stop' })
+    const stop = payloads.find((p) => p.race === 'stop')
+    expect('duration' in stop).toBe(false)
+  })
+
   it('routes an {error} message to onError, not onFrame', () => {
     const errs: string[] = []
     const frames: unknown[] = []

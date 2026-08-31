@@ -104,6 +104,66 @@ describe('usePrediction', () => {
     expect(result.current.transcript).toBe('')
   })
 
+  it('exposes the race snapshot from frames, retaining it when a frame carries null', () => {
+    const { result } = renderHook(() => usePrediction('ws://test'))
+    act(() => FakeWS.last!._open())
+    expect(result.current.race).toBeNull()
+
+    const snap = {
+      phase: 'running',
+      target_word: 'cat',
+      typed: 'c',
+      word_index: 0,
+      upcoming: [],
+      correct_letters: 1,
+      attempted_letters: 1,
+      seconds_left: 12,
+      spm: 20,
+      results: null,
+    }
+    act(() => FakeWS.last!._msg({ ...evt, race: snap }))
+    expect(result.current.race?.phase).toBe('running')
+
+    act(() => FakeWS.last!._msg({ ...evt, race: null }))
+    expect(result.current.race?.phase).toBe('running')
+  })
+
+  it('startRace and stopRace send through to the client', () => {
+    const { result } = renderHook(() => usePrediction('ws://test'))
+    act(() => FakeWS.last!._open())
+    act(() => result.current.startRace(15))
+    act(() => result.current.stopRace())
+    const payloads = FakeWS.last!.sent.map((s) => JSON.parse(s))
+    expect(payloads).toContainEqual({ race: 'start', duration: 15 })
+    expect(payloads).toContainEqual({ race: 'stop' })
+  })
+
+  it('clears the race snapshot on a mode change', () => {
+    const { result } = renderHook(() => usePrediction('ws://test'))
+    act(() => FakeWS.last!._open())
+    act(() =>
+      FakeWS.last!._msg({
+        ...evt,
+        race: {
+          phase: 'running',
+          target_word: 'cat',
+          typed: '',
+          word_index: 0,
+          upcoming: [],
+          correct_letters: 0,
+          attempted_letters: 0,
+          seconds_left: 30,
+          spm: 0,
+          results: null,
+        },
+      }),
+    )
+    expect(result.current.race?.phase).toBe('running')
+
+    act(() => result.current.setMode('train'))
+    expect(result.current.race).toBeNull()
+  })
+
   it('setMode and sendAction call through to the client', () => {
     const { result } = renderHook(() => usePrediction('ws://test'))
     act(() => FakeWS.last!._open())

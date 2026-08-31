@@ -92,6 +92,10 @@ export class PredictionClient {
     this.rawSend({ action })
   }
 
+  sendRace(action: 'start' | 'stop', duration?: number): void {
+    this.rawSend({ race: action, ...(duration !== undefined ? { duration } : {}) })
+  }
+
   close() {
     this.stopped = true
     if (this.reconnectTimer !== null) {

@@ -20,6 +20,7 @@ function mkEvent(partial: Partial<PredictionEvent>): PredictionEvent {
     timestamp: 0,
     client_timestamp: null,
     transcript: null,
+    race: null,
     ...partial,
   }
 }
