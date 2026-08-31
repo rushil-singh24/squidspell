@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { usePrediction } from '../hooks/usePrediction'
+import type { RaceSnapshot } from '../types'
 import { SquidMascot } from '../components/SquidMascot'
 import { RaceWordStream } from './RaceWordStream'
 
@@ -111,6 +111,12 @@ const bestLine: CSSProperties = {
   color: 'var(--sq-fg-muted)',
 }
 
+const cancelledBanner: CSSProperties = {
+  margin: 0,
+  fontSize: '0.875rem',
+  color: 'var(--sq-error)',
+}
+
 const resultsCard: CSSProperties = {
   display: 'flex',
   gap: '1.5rem',
@@ -139,13 +145,23 @@ const statLabel: CSSProperties = {
   color: 'var(--sq-fg-muted)',
 }
 
-export function RacePane() {
-  const { race, startRace, stopRace } = usePrediction()
+export function RacePane({
+  race,
+  startRace,
+  stopRace,
+}: {
+  race: RaceSnapshot | null
+  startRace: (duration: number) => void
+  stopRace: () => void
+}) {
   const [selectedDuration, setSelectedDuration] = useState<number>(30)
   const [bests, setBests] = useState<Bests>(loadBests)
   const [dismissed, setDismissed] = useState(false)
   const [showCelebrate, setShowCelebrate] = useState(false)
+  const [raceCancelled, setRaceCancelled] = useState(false)
   const finishedHandledRef = useRef(false)
+  const prevPhase = useRef<string | undefined>(undefined)
+  const expectingStop = useRef(false)
 
   useEffect(() => {
     if (race?.phase === 'running') {
@@ -162,18 +178,34 @@ export function RacePane() {
       finishedHandledRef.current = true
       const { spm } = race.results
       setShowCelebrate(true)
-      setBests((prev) => {
-        if (spm <= (prev[selectedDuration] ?? 0)) return prev
-        const next = { ...prev, [selectedDuration]: spm }
+      if (spm > (bests[selectedDuration] ?? 0)) {
+        const next = { ...bests, [selectedDuration]: spm }
+        setBests(next)
         try {
           localStorage.setItem(BESTS_KEY, JSON.stringify(next))
         } catch {
           /* ignore */
         }
-        return next
-      })
+      }
     }
-  }, [race, selectedDuration])
+  }, [race?.phase, race?.results, selectedDuration, bests])
+
+  // Surface a mid-race socket drop: the server rebuilds a fresh idle RaceState
+  // on reconnect, so `race` snaps running -> idle/null with no local Stop.
+  useEffect(() => {
+    const phase = race?.phase
+    if (phase === 'running') setRaceCancelled(false)
+    if (
+      prevPhase.current === 'running' &&
+      phase !== 'running' &&
+      phase !== 'finished' &&
+      !expectingStop.current
+    ) {
+      setRaceCancelled(true)
+    }
+    expectingStop.current = false
+    prevPhase.current = phase
+  }, [race?.phase])
 
   useEffect(() => {
     if (!showCelebrate) return
@@ -195,7 +227,14 @@ export function RacePane() {
             upcoming={race.upcoming}
           />
         </div>
-        <button type="button" style={linkButton} onClick={() => stopRace()}>
+        <button
+          type="button"
+          style={linkButton}
+          onClick={() => {
+            expectingStop.current = true
+            stopRace()
+          }}
+        >
           Stop
         </button>
       </div>
@@ -218,7 +257,9 @@ export function RacePane() {
               <span style={statLabel}>Accuracy</span>
             </div>
             <div style={stat}>
-              <span style={statValue}>{Math.round(r.consistency)}</span>
+              <span style={statValue}>
+                {r.consistency == null ? '—' : Math.round(r.consistency)}
+              </span>
               <span style={statLabel}>Consistency</span>
             </div>
           </div>
@@ -226,6 +267,7 @@ export function RacePane() {
             type="button"
             style={primaryButton}
             onClick={() => {
+              expectingStop.current = true
               setDismissed(true)
               stopRace()
             }}
@@ -241,6 +283,9 @@ export function RacePane() {
   return (
     <div style={wrap}>
       <div style={center}>
+        {raceCancelled && (
+          <p style={cancelledBanner}>Connection dropped — race cancelled.</p>
+        )}
         <SquidMascot mood="idle" size={96} />
         <div style={segmented} role="group" aria-label="Race duration">
           {DURATIONS.map((d) => (

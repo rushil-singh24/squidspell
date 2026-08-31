@@ -56,7 +56,11 @@ export function AppShell() {
                 onAction={prediction.sendAction}
               />
             ) : (
-              <RacePane />
+              <RacePane
+                race={prediction.race}
+                startRace={prediction.startRace}
+                stopRace={prediction.stopRace}
+              />
             )}
           </PanelSwap>
         </div>

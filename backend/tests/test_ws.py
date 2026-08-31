@@ -239,7 +239,8 @@ def test_ws_race_expiry_produces_results(ws_app, monkeypatch):
                 if race is not None and race["phase"] == "finished":
                     break
     assert race is not None and race["phase"] == "finished"
-    assert set(race["results"]) >= {"spm", "accuracy", "consistency"}
+    assert set(race["results"]) >= {"spm", "accuracy", "consistency", "duration_s"}
+    assert "duration_s" in race["results"]
 
 
 def test_ws_race_finished_snapshot_is_stable_and_not_resent(ws_app, monkeypatch):
@@ -267,13 +268,15 @@ def test_ws_race_finished_snapshot_is_stable_and_not_resent(ws_app, monkeypatch)
 def test_ws_bad_race_command_errors_keep_open(ws_app):
     with TestClient(ws_app) as c:
         with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"race": "start", "duration": 15})  # race mode not set
+            assert ws.receive_json()["error"] == "race command outside race mode"
             ws.send_json({"mode": "race"})
             ws.send_json({"race": "start"})  # no duration
-            assert "error" in ws.receive_json()
+            assert ws.receive_json()["error"] == "invalid race duration"
             ws.send_json({"race": "start", "duration": 99})  # bad duration
-            assert "error" in ws.receive_json()
+            assert ws.receive_json()["error"] == "invalid race duration"
             ws.send_json({"race": "boom"})  # unknown command
-            assert "error" in ws.receive_json()
+            assert ws.receive_json()["error"] == "unknown race command"
             ws.send_json({"landmarks": None})
             ok = ws.receive_json()
             assert "error" not in ok and ok["static_label"] is None

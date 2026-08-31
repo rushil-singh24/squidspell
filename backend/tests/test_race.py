@@ -1,4 +1,3 @@
-import math
 import pytest
 from app.race import RaceState, RACE_DURATIONS, RACE_WORDS
 
@@ -64,7 +63,19 @@ def test_tick_finishes_race_and_produces_results():
     assert res is not None
     assert res["spm"] == pytest.approx(len(word) / (15 / 60), rel=1e-3)
     assert 0.0 <= res["accuracy"] <= 1.0
+    assert isinstance(res["consistency"], float)
     assert 0.0 <= res["consistency"] <= 100.0
+    assert res["duration_s"] == 15
+
+
+def test_results_consistency_is_none_with_under_two_gaps():
+    r = RaceState(seed=3); r.start(15, 0)
+    word = r.snapshot(0)["target_word"]
+    r.commit_letter(word[0], 200)  # one commit -> zero gaps
+    r.tick(15_000)
+    res = r.snapshot(15_000)["results"]
+    assert res["consistency"] is None
+    assert res["duration_s"] == 15
 
 
 def test_commit_ignored_before_start_and_after_finish():

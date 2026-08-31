@@ -51,7 +51,6 @@ class RaceState:
         self._last_ms: float | None = None
         self._start_ms: float = 0.0
         self._duration_ms: int = 0
-        self._end_ms: float | None = None
         self._rng: random.Random | None = None
 
     def _shuffled_pool(self) -> list[str]:
@@ -105,7 +104,6 @@ class RaceState:
     def tick(self, now_ms: float) -> None:
         if self._phase == "running" and now_ms - self._start_ms >= self._duration_ms:
             self._phase = "finished"
-            self._end_ms = now_ms
 
     def snapshot(self, now_ms: float) -> dict:
         running = self._phase == "running"
@@ -152,8 +150,9 @@ class RaceState:
         spm = round(self._correct / minutes, 1) if minutes else 0.0
         accuracy = round(self._correct / self._attempted, 3) if self._attempted else 0.0
 
+        consistency: float | None
         if len(self._gaps) < 2:
-            consistency = 0.0
+            consistency = None
         else:
             mean = statistics.mean(self._gaps)
             if mean == 0:
@@ -162,4 +161,9 @@ class RaceState:
                 cv = statistics.pstdev(self._gaps) / mean
                 consistency = round(max(0.0, 1.0 - cv) * 100, 1)
 
-        return {"spm": spm, "accuracy": accuracy, "consistency": consistency}
+        return {
+            "spm": spm,
+            "accuracy": accuracy,
+            "consistency": consistency,
+            "duration_s": self._duration_ms // 1000,
+        }

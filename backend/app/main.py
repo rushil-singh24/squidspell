@@ -144,10 +144,16 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
                 if "race" in msg:
                     cmd = msg["race"]
                     if cmd == "start":
-                        duration = msg.get("duration")
-                        if race is None or duration not in RACE_DURATIONS:
+                        if race is None:
                             await websocket.send_json({
-                                "error": "bad race command",
+                                "error": "race command outside race mode",
+                                "timestamp": int(time.time() * 1000),
+                            })
+                            continue
+                        duration = msg.get("duration")
+                        if duration not in RACE_DURATIONS:
+                            await websocket.send_json({
+                                "error": "invalid race duration",
                                 "timestamp": int(time.time() * 1000),
                             })
                             continue

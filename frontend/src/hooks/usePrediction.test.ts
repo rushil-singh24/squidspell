@@ -123,9 +123,11 @@ describe('usePrediction', () => {
     }
     act(() => FakeWS.last!._msg({ ...evt, race: snap }))
     expect(result.current.race?.phase).toBe('running')
+    expect(result.current.race?.typed).toBe('c')
 
     act(() => FakeWS.last!._msg({ ...evt, race: null }))
     expect(result.current.race?.phase).toBe('running')
+    expect(result.current.race?.typed).toBe('c')
   })
 
   it('startRace and stopRace send through to the client', () => {

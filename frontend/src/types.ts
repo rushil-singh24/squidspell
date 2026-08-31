@@ -5,7 +5,8 @@ export type TranscriptAction = 'delete' | 'space' | 'clear'
 export interface RaceResults {
   spm: number
   accuracy: number
-  consistency: number
+  consistency: number | null
+  duration_s: number
 }
 
 export interface RaceSnapshot {
