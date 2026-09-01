@@ -209,9 +209,9 @@ from inference import FrameResult, InferenceEngine
 
 def test_engine_static_commit_flows_through():
     eng = InferenceEngine(_ScriptedStatic("A", 0.9), _ScriptedMotion("J", 0.9))
-    # still hand at center -> gate never arms; smoother commits "A" after 500ms
+    # still hand at center -> gate never arms; smoother commits "A" after STATIC_STABLE_MS (800ms)
     r = None
-    for t in range(0, 700, 33):
+    for t in range(0, 1100, 33):
         r = eng.process_frame(_hand_at(0.5, 0.5), now_ms=t)
     assert isinstance(r, FrameResult)
     # somewhere in that loop "A" was committed exactly once
@@ -219,7 +219,7 @@ def test_engine_static_commit_flows_through():
     eng2 = InferenceEngine(_ScriptedStatic("A", 0.9), _ScriptedMotion("J", 0.9))
     commits = [
         eng2.process_frame(_hand_at(0.5, 0.5), now_ms=t).committed_letter
-        for t in range(0, 700, 33)
+        for t in range(0, 1100, 33)
     ]
     assert commits.count("A") == 1
 
