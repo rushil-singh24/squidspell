@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useHandLandmarker } from '../hooks/useHandLandmarker'
 import { usePrediction } from '../hooks/usePrediction'
+import { useAuth } from '../hooks/useAuth'
 import { WebcamPane } from './WebcamPane'
 import { ModeToggle } from './ModeToggle'
 import { ThemeToggle } from './ThemeToggle'
+import { AuthControl } from './AuthControl'
 import { PanelSwap } from '../motion/PanelSwap'
 import { TrainPane } from '../modes/TrainPane'
 import { RacePane } from '../modes/RacePane'
@@ -12,6 +14,7 @@ import type { Mode } from '../types'
 export function AppShell() {
   const [mode, setMode] = useState<Mode>('train')
   const prediction = usePrediction()
+  const auth = useAuth()
   const hand = useHandLandmarker(prediction.sendLandmarks)
   const [dismissedError, setDismissedError] = useState<string | null>(null)
 
@@ -66,7 +69,23 @@ export function AppShell() {
         </div>
       </div>
 
-      <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}>
+      <div
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <AuthControl
+          user={auth.user}
+          loading={auth.loading}
+          signInWithGoogle={auth.signInWithGoogle}
+          signOut={auth.signOut}
+        />
         <ThemeToggle />
       </div>
 
