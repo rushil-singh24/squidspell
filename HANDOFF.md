@@ -214,6 +214,8 @@ per phase so neither is a surprise mid-build.
   (signing on camera, including a J or Z) — an agent can't generate a real
   demo of a human signing.
 
+**Live verification status (2026-08-31):** Phase 3 static live pass DONE — 24 static letters recognised well with the 10/550 smoother. **J/Z deferred**: the motion pipeline is data-limited (motion model trained on only 46 J / 48 Z / 44 negative; negative-class recall 0.78), and the arming gate leans on the static model reading J/Z start poses it was never trained on. Fix = a webcam data-collection pass with `ml/collect_motion.py` (~120-150 samples/class incl. rich negatives) + `python train_motion.py` retrain, then re-tune. Not blocking any other phase. Phase 5/6/7 frontend live pass DONE — webcam+skeleton, Train transcript, Race countdown/HUD/results all verified; RacePane socket wiring confirmed good.
+
 **Phase 2 is complete as of 2026-08-19** — static and motion classifiers are trained and
 exported. **Phase 3 code is complete as of 2026-08-28** — awaits human live-webcam verification.
 **Phase 4 is complete as of 2026-08-28** — backend serves all endpoints and WebSocket schema.
