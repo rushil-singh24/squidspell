@@ -16,10 +16,10 @@ from collections import Counter, deque
 from dataclasses import dataclass
 
 # --- Static smoothing -------------------------------------------------------
-STATIC_VOTE_WINDOW = 12     # frames in the majority-vote window
-STATIC_STABLE_MS = 650      # majority must hold this long before a letter commits
-                           # (8/500 -> 12/650: wider vote window kills
-                           #  transitional-handshape over-commits; 800ms felt sluggish)
+STATIC_VOTE_WINDOW = 10     # frames in the majority-vote window
+STATIC_STABLE_MS = 550      # majority must hold this long before a letter commits
+                           # (8/500 -> 10/550: small bump to stop transitional
+                           #  handshapes committing mid-sign, without feeling sluggish)
 
 
 def _majority(labels):

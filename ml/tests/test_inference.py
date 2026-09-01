@@ -62,8 +62,8 @@ def test_reset_clears_state():
 
 
 def test_default_constants():
-    assert STATIC_VOTE_WINDOW == 12
-    assert STATIC_STABLE_MS == 650
+    assert STATIC_VOTE_WINDOW == 10
+    assert STATIC_STABLE_MS == 550
 
 
 from inference import (
@@ -209,7 +209,7 @@ from inference import FrameResult, InferenceEngine
 
 def test_engine_static_commit_flows_through():
     eng = InferenceEngine(_ScriptedStatic("A", 0.9), _ScriptedMotion("J", 0.9))
-    # still hand at center -> gate never arms; smoother commits "A" after STATIC_STABLE_MS (650ms)
+    # still hand at center -> gate never arms; smoother commits "A" after STATIC_STABLE_MS (550ms)
     r = None
     for t in range(0, 1100, 33):
         r = eng.process_frame(_hand_at(0.5, 0.5), now_ms=t)
