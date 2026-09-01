@@ -201,7 +201,7 @@ def test_gate_reset_returns_to_idle():
 
 
 def test_start_poses_default_mapping():
-    assert MOTION_START_POSES == {"I": "J", "D": "Z"}
+    assert MOTION_START_POSES == {"I": "J", "D": "Z", "X": "Z", "U": "Z", "R": "Z", "K": "Z"}
 
 
 from inference import FrameResult, InferenceEngine

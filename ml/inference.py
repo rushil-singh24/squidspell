@@ -70,12 +70,20 @@ class StaticSmoother:
 
 # --- Motion gating --------------------------------------------------------
 MOTION_BUFFER_LEN = 30            # max frames kept in the rolling buffer (~1s at 30fps)
-MOTION_MOVEMENT_THRESHOLD = 0.15  # centroid displacement over the buffer to arm the gate
+MOTION_MOVEMENT_THRESHOLD = 0.11  # centroid displacement over the buffer to arm the gate
+                                 # (0.15 -> 0.11 after the 2026-08-31 live pass: Z's
+                                 #  horizontal zig-zag travels less than J's hook)
 MOTION_STOP_VELOCITY = 0.02       # per-frame centroid delta below which motion is "stopped"
 MOTION_MIN_SEGMENT_FRAMES = 5     # frames of motion required before a stop can classify
 MOTION_MIN_CONFIDENCE = 0.6       # min motion-model confidence to commit a J/Z
-MOTION_START_POSE_CONFIDENCE = 0.5  # min static confidence for the start-pose precondition
-MOTION_START_POSES = {"I": "J", "D": "Z"}  # static label -> motion letter it gates
+MOTION_START_POSE_CONFIDENCE = 0.35  # min static confidence for the start-pose precondition
+                                    # (0.5 -> 0.35: the static model never saw J/Z's
+                                    #  start poses, so it matches them only weakly)
+# static label the frozen-first-frame handshape is read as -> motion letter it gates.
+# J's start reads cleanly as "I". Z's start is a bare index point the static model
+# (A-I,K-Y only) tends to call D / X / U / R / K; accept any of those to arm a Z
+# (2026-08-31 live pass: with only {"D":"Z"} the Z gate never armed).
+MOTION_START_POSES = {"I": "J", "D": "Z", "X": "Z", "U": "Z", "R": "Z", "K": "Z"}
 MOTION_NO_HAND_ABORT = 3  # consecutive no-hand frames while armed -> abandon the gesture
 
 
