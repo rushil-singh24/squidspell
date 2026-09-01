@@ -62,8 +62,8 @@ def test_reset_clears_state():
 
 
 def test_default_constants():
-    assert STATIC_VOTE_WINDOW == 8
-    assert STATIC_STABLE_MS == 500
+    assert STATIC_VOTE_WINDOW == 12
+    assert STATIC_STABLE_MS == 800
 
 
 from inference import (

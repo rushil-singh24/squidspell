@@ -188,7 +188,7 @@ backend imports it verbatim.
 
 Starting tuning constants (top of `ml/inference.py`), chosen as reasonable
 defaults for the live pass, NOT yet validated at a webcam:
-- `STATIC_VOTE_WINDOW = 8` frames, `STATIC_STABLE_MS = 500` — majority vote over
+- `STATIC_VOTE_WINDOW = 12` frames, `STATIC_STABLE_MS = 800` — majority vote over
   the last 8 per-frame predictions, commit a letter once the majority holds
   ≥500ms. Re-commit only after the majority changes and a new letter stabilises.
   Note: the static smoother's majority vote ignores no-hand (`None`) frames, so a
