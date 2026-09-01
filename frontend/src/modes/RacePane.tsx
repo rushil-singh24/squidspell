@@ -153,7 +153,8 @@ export function RacePane({
   useEffect(() => {
     let active = true
     loadBests(userId).then((b) => {
-      if (active) setBests(b)
+      // null = a signed-in Supabase read failed; keep current bests.
+      if (active && b) setBests(b)
     })
     return () => {
       active = false
@@ -175,6 +176,9 @@ export function RacePane({
       finishedHandledRef.current = true
       const r = race.results
       setShowCelebrate(true)
+      // Read userId from the ref, not the deps array: this effect is keyed on
+      // race phase/results, not userId, so adding userId to the deps would
+      // re-run the whole finished-handler on a sign-in/out identity change.
       const uid = userIdRef.current
       void recordRaceResult(uid, {
         duration_s: selectedDuration,
@@ -182,7 +186,8 @@ export function RacePane({
         accuracy: r.accuracy,
         consistency: r.consistency,
       }).then((next) => {
-        if (uid === userIdRef.current) setBests(next)
+        // null = a signed-in Supabase write/re-read failed; keep current bests.
+        if (next && uid === userIdRef.current) setBests(next)
       })
     }
   }, [race?.phase, race?.results, selectedDuration])

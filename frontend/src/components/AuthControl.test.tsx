@@ -78,6 +78,7 @@ describe('AuthControl', () => {
         signOut={vi.fn()}
       />,
     )
+    expect(screen.getByTestId('auth-loading')).toBeInTheDocument()
     expect(screen.queryByRole('button')).toBeNull()
   })
 })

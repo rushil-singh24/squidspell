@@ -7,6 +7,9 @@ off one shared prediction engine: **Train** (live, open-ended fingerspelling
 to text, for practice and communication) and **Race** (a MonkeyType-style
 timed fingerspelling speed/accuracy test).
 
+Use is fully anonymous by default; an optional Google sign-in (Supabase)
+persists your saved transcripts and race results across devices.
+
 <!-- demo GIF goes here — added in Phase 11 -->
 
 Full design spec: `docs/superpowers/specs/2026-08-08-squidspell-full-phases.md`

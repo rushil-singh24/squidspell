@@ -54,7 +54,7 @@ function anon(userId: string | null): boolean {
 
 export async function loadTrainHistory(
   userId: string | null,
-): Promise<TrainEntry[]> {
+): Promise<TrainEntry[] | null> {
   if (anon(userId)) return loadLocal()
 
   const { data, error } = await supabase!
@@ -64,8 +64,10 @@ export async function loadTrainHistory(
     .order('created_at', { ascending: false })
 
   if (error) {
-    console.warn('[trainHistory] load failed; falling back to local store', error)
-    return loadLocal()
+    // Signed-in failure must NOT touch the anon store — return null so the
+    // caller keeps whatever it already has.
+    console.warn('[trainHistory] load failed; keeping current state', error)
+    return null
   }
 
   return ((data ?? []) as TranslationRow[]).map((row) => ({
@@ -78,7 +80,7 @@ export async function loadTrainHistory(
 export async function saveTrainSentence(
   userId: string | null,
   text: string,
-): Promise<TrainEntry[]> {
+): Promise<TrainEntry[] | null> {
   if (anon(userId)) {
     const next = [newEntry(text), ...loadLocal()]
     writeLocal(next)
@@ -90,10 +92,9 @@ export async function saveTrainSentence(
     .insert({ user_id: userId, sentence: text })
 
   if (error) {
-    console.warn('[trainHistory] save failed; falling back to local store', error)
-    const next = [newEntry(text), ...loadLocal()]
-    writeLocal(next)
-    return next
+    // Non-destructive: do not write the anon store from the signed-in path.
+    console.warn('[trainHistory] save failed; keeping current state', error)
+    return null
   }
 
   return loadTrainHistory(userId)
@@ -102,24 +103,25 @@ export async function saveTrainSentence(
 export async function deleteTrainSentence(
   userId: string | null,
   id: string,
-): Promise<TrainEntry[]> {
+): Promise<TrainEntry[] | null> {
   if (anon(userId)) {
     const next = loadLocal().filter((e) => e.id !== id)
     writeLocal(next)
     return next
   }
 
-  // RLS (`auth.uid() = user_id`) scopes the delete to the current user.
-  const { error } = await supabase!.from('translations').delete().eq('id', id)
+  // Scope the delete to the signer explicitly, matching the sibling selects —
+  // defense in depth on top of RLS (`auth.uid() = user_id`), not RLS-only.
+  const { error } = await supabase!
+    .from('translations')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userId)
 
   if (error) {
-    console.warn(
-      '[trainHistory] delete failed; falling back to local store',
-      error,
-    )
-    const next = loadLocal().filter((e) => e.id !== id)
-    writeLocal(next)
-    return next
+    // Non-destructive: leave the anon store alone; caller keeps current state.
+    console.warn('[trainHistory] delete failed; keeping current state', error)
+    return null
   }
 
   return loadTrainHistory(userId)

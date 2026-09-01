@@ -39,6 +39,7 @@ export function AuthControl({ user, loading, signInWithGoogle, signOut }: Props)
       <div style={boxStyle}>
         <span
           aria-hidden="true"
+          data-testid="auth-loading"
           style={{
             display: 'inline-block',
             width: 104,

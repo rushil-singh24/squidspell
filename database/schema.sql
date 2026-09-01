@@ -26,6 +26,11 @@ create table if not exists public.sessions (
 
 create table if not exists public.translations (
   id         uuid primary key default gen_random_uuid(),
+  -- `sessions` / `session_id` are spec-mandated but currently UNWIRED: no app
+  -- code inserts a session row, so `session_id` is always null today. If a later
+  -- phase starts populating it, the `translations_owner_all` insert policy below
+  -- must ALSO verify the referenced session's `user_id` = auth.uid() -- the FK
+  -- reference is not an RLS check and does not enforce ownership on its own.
   session_id uuid references public.sessions on delete cascade,
   user_id    uuid not null references auth.users on delete cascade,
   sentence   text not null,
@@ -107,13 +112,19 @@ grant select, insert, update, delete on public.translations to authenticated;
 grant select, insert, update, delete on public.race_results to authenticated;
 
 -- ---------------------------------------------------------------------------
--- Seed: Phase 2 winning models (see DECISIONS.md [Phase 2] / ml/results/)
+-- Seed: Phase 2 winning models (see DECISIONS.md [Phase 2] / ml/results/).
+-- All metric columns (accuracy/precision/recall/f1) plus a short hyperparameters
+-- JSON note are populated from comparison.md / motion_comparison.md. The exact
+-- static grid isn't recorded in a machine-readable file, so its note is honest
+-- about that.
 --
 -- static: random forest on the 40-float engineered features
---         (ml/features_static.py). Test accuracy 0.994, CV accuracy 0.994.
+--         (ml/features_static.py). Test accuracy 0.994, CV accuracy 0.994;
+--         precision/recall/f1 all 0.994.
 --
 -- motion: random forest on the 49-float motion-trajectory features
---         (ml/features_motion.py). Test accuracy 0.893.
+--         (ml/features_motion.py). Test accuracy 0.8929, precision 0.8955,
+--         recall 0.8929, F1 0.8925.
 --         Per-class recall: J = 0.889, Z = 1.000, negative = 0.778.
 --         CAVEAT: the negative-class recall (0.778) is computed on only
 --         ~9 test takes (20% of 43), so it is noisy. It is the metric to
@@ -122,14 +133,22 @@ grant select, insert, update, delete on public.race_results to authenticated;
 --         threshold tuning in the inference loop.
 -- ---------------------------------------------------------------------------
 
-insert into public.models (version, kind, algorithm, feature_set, accuracy)
-select '2026-08-19', 'static', 'random_forest', 'engineered', 0.994
+insert into public.models
+  (version, kind, algorithm, feature_set, accuracy, precision, recall, f1, hyperparameters)
+select
+  '2026-08-19', 'static', 'random_forest', 'engineered',
+  0.994, 0.994, 0.994, 0.994,
+  '{"note":"GridSearchCV-tuned; see ml/results/comparison.md"}'::jsonb
 where not exists (
   select 1 from public.models where version = '2026-08-19' and kind = 'static'
 );
 
-insert into public.models (version, kind, algorithm, feature_set, accuracy)
-select '2026-08-19', 'motion', 'random_forest', null, 0.893
+insert into public.models
+  (version, kind, algorithm, feature_set, accuracy, precision, recall, f1, hyperparameters)
+select
+  '2026-08-19', 'motion', 'random_forest', null,
+  0.8929, 0.8955, 0.8929, 0.8925,
+  '{"note":"per-class recall J=0.889 Z=1.000 negative=0.778; see ml/results/motion_comparison.md"}'::jsonb
 where not exists (
   select 1 from public.models where version = '2026-08-19' and kind = 'motion'
 );

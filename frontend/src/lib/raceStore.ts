@@ -46,7 +46,7 @@ function anon(userId: string | null): boolean {
   return userId === null || !isSupabaseConfigured || !supabase
 }
 
-export async function loadBests(userId: string | null): Promise<Bests> {
+export async function loadBests(userId: string | null): Promise<Bests | null> {
   if (anon(userId)) return loadLocal()
 
   const { data, error } = await supabase!
@@ -55,8 +55,10 @@ export async function loadBests(userId: string | null): Promise<Bests> {
     .eq('user_id', userId)
 
   if (error) {
-    console.warn('[raceStore] load failed; falling back to local store', error)
-    return loadLocal()
+    // Signed-in failure must NOT read/write the anon store — return null so the
+    // caller keeps whatever bests it already has.
+    console.warn('[raceStore] load failed; keeping current state', error)
+    return null
   }
 
   const out: Bests = {}
@@ -74,7 +76,7 @@ export async function recordRaceResult(
     accuracy: number | null
     consistency: number | null
   },
-): Promise<Bests> {
+): Promise<Bests | null> {
   if (anon(userId)) return bumpLocal(r.duration_s, r.spm)
 
   const { error } = await supabase!.from('race_results').insert({
@@ -86,8 +88,9 @@ export async function recordRaceResult(
   })
 
   if (error) {
-    console.warn('[raceStore] record failed; falling back to local store', error)
-    return bumpLocal(r.duration_s, r.spm)
+    // Non-destructive: do not bump the anon store from the signed-in path.
+    console.warn('[raceStore] record failed; keeping current state', error)
+    return null
   }
 
   return loadBests(userId)

@@ -19,15 +19,6 @@ class CountingWS {
   close() {}
 }
 
-vi.mock('../hooks/useAuth', () => ({
-  useAuth: () => ({
-    user: null,
-    loading: false,
-    signInWithGoogle: vi.fn(),
-    signOut: vi.fn(),
-  }),
-}))
-
 const realWS = globalThis.WebSocket
 
 beforeEach(() => {

@@ -152,20 +152,22 @@ describe('raceStore — signed-in (Supabase) path', () => {
     expect(bests).toEqual({ 30: 44 })
   })
 
-  it('loadBests warns and falls back to the local map on a Supabase error', async () => {
+  it('loadBests returns null and leaves the local map untouched on a Supabase error', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    localStorage.setItem(BESTS_KEY, JSON.stringify({ 30: 99 }))
+    const seed = JSON.stringify({ 30: 99 })
+    localStorage.setItem(BESTS_KEY, seed)
     const { select } = stubSelect({ data: null, error: { message: 'boom' } })
     mocks.from.mockReturnValue({ select })
 
     const bests = await loadBests('user-1')
 
     expect(warn).toHaveBeenCalled()
-    expect(bests).toEqual({ 30: 99 })
+    expect(bests).toBeNull()
+    expect(localStorage.getItem(BESTS_KEY)).toBe(seed)
     warn.mockRestore()
   })
 
-  it('recordRaceResult warns and writes the local map when the insert errors', async () => {
+  it('recordRaceResult returns null and does not write the local map when the insert errors', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const insert = vi.fn().mockResolvedValue({ error: { message: 'nope' } })
     mocks.from.mockReturnValue({ insert })
@@ -178,10 +180,8 @@ describe('raceStore — signed-in (Supabase) path', () => {
     })
 
     expect(warn).toHaveBeenCalled()
-    expect(bests).toEqual({ 15: 30 })
-    expect(JSON.parse(localStorage.getItem(BESTS_KEY) as string)).toEqual({
-      15: 30,
-    })
+    expect(bests).toBeNull()
+    expect(localStorage.getItem(BESTS_KEY)).toBeNull()
     warn.mockRestore()
   })
 })

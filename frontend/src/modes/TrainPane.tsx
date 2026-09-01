@@ -113,7 +113,8 @@ export const TrainPane = memo(function TrainPane({
   useEffect(() => {
     let active = true
     loadTrainHistory(userId).then((list) => {
-      if (active) setHistory(list)
+      // null = a signed-in Supabase read failed; keep current state.
+      if (active && list) setHistory(list)
     })
     return () => {
       active = false
@@ -123,7 +124,7 @@ export const TrainPane = memo(function TrainPane({
   function onSave() {
     const uid = userId
     void saveTrainSentence(uid, transcript).then((list) => {
-      if (uid === userIdRef.current) setHistory(list)
+      if (list && uid === userIdRef.current) setHistory(list)
     })
   }
 
@@ -217,7 +218,7 @@ export const TrainPane = memo(function TrainPane({
                 onClick={() => {
                   const uid = userId
                   void deleteTrainSentence(uid, entry.id).then((list) => {
-                    if (uid === userIdRef.current) setHistory(list)
+                    if (list && uid === userIdRef.current) setHistory(list)
                   })
                 }}
                 style={{

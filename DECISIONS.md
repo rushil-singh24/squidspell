@@ -618,3 +618,57 @@ Why: A curated short-word list keeps rounds fingerspelling-friendly and avoids a
 dictionary dependency or generation logic for v1.
 Affects: Phase 8 optionally swaps this for a Supabase-backed word list; the
 `RaceState` queue interface stays the same.
+
+## [Phase 8] Auth & persistence via Supabase — frontend-direct, RLS-isolated, non-destructive anon fallback
+Decided:
+- The frontend talks to Supabase directly via `@supabase/supabase-js`
+  (`frontend/src/lib/supabase.ts`) for BOTH auth and CRUD. The FastAPI backend is
+  not involved and never proxies a Supabase call. Per-user isolation is enforced
+  entirely by Row-Level Security: `for all using/with check (auth.uid() =
+  user_id)` policies on `sessions` / `translations` / `race_results`, and
+  `models` as public-read with no write policy at all. `database/schema.sql` is a
+  single idempotent script the human runs once in the Supabase SQL editor.
+- Storage-adapter pattern: `lib/trainHistory.ts` and `lib/raceStore.ts` each
+  expose one async API that `TrainPane` / `RacePane` call with a `userId: string
+  | null` prop. `userId` is drilled from `useAuth()` in `AppShell` — same
+  single-instance rule as `usePrediction` (one hook instance, prop-drilled, not a
+  context). The adapter uses Supabase when `userId` is non-null AND
+  `isSupabaseConfigured`, otherwise `localStorage` with the UNCHANGED keys
+  `squidspell-train-history` / `squidspell-race-bests`.
+- Signed-in Supabase failures are NON-DESTRUCTIVE: the adapter `console.warn`s
+  and returns `null`, and the pane leaves its current state untouched
+  (`.then((r) => { if (r) setHistory(r) })`). The signed-in code path never
+  reads or writes the anonymous `localStorage` store. The earlier behaviour
+  (falling back to `loadLocal()` / `writeLocal()` on a signed-in error) caused
+  "my save vanished on next load" and cross-contaminated anon vs signed-in data.
+  The anon path still always returns a concrete value, never `null`.
+- Anon → signed-in transition does NO data migration. Signing in reloads both
+  panes from Supabase; any pre-existing anonymous `localStorage` history/bests
+  becomes invisible until sign-out (nothing is lost or duplicated — the keys are
+  untouched). Deliberate: migration isn't worth the complexity at portfolio
+  scale.
+- Env vars: `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`. The anon-key value is
+  an `sb_publishable_...` key; `createClient` accepts it in the anon-key slot.
+  These are Vite BUILD-TIME vars — Phase 9's `docker/Dockerfile.frontend` must
+  pass them as build `ARG`s, NOT as a runtime `environment:` block in
+  docker-compose, or the deployed app silently runs anonymous
+  (`isSupabaseConfigured === false`, no error surfaced anywhere).
+- Sign-in uses `signInWithOAuth({ provider: 'google', options: { redirectTo:
+  window.location.origin } })`. Phase 10 must add the deployed origin to Supabase
+  → Authentication → URL Configuration → Redirect URLs, or Google sign-in fails
+  only in production.
+- The `models` table is seeded once from `ml/results/` (static RF/engineered
+  acc/prec/rec/f1 = 0.994 across the board; motion RF =
+  0.8929/0.8955/0.8929/0.8925), with a short `hyperparameters` JSON note per row
+  since the exact static grid isn't in a machine-readable file. It is never
+  written at runtime (no client write policy).
+Why: The spec's Phase 8 architecture note mandates frontend-direct-to-Supabase
+with RLS as the isolation boundary and explicitly forbids a backend proxy layer.
+The adapter pattern keeps each pane's call site to one line and preserves the
+fully-anonymous experience with zero backend. Non-destructive fallback keeps a
+transient network / RLS error from corrupting a user's local data.
+Affects: `TrainPane` / `RacePane` now require a `userId` prop, supplied by
+`AppShell` from `useAuth()`. Phase 9 (`Dockerfile.frontend` build ARGs for the
+Supabase env vars). Phase 10 (add the deployed origin to the Supabase redirect
+allowlist; run `database/schema.sql` once). Phase 11 README ("why Supabase over
+custom auth").
