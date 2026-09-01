@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RacePane } from './RacePane'
 import type { RaceSnapshot } from '../types'
@@ -38,7 +38,9 @@ const finished: RaceSnapshot = {
 
 describe('RacePane', () => {
   it('pre-race: shows the duration control, a Start button, and the idle mascot', () => {
-    render(<RacePane race={null} startRace={noop} stopRace={noop} />)
+    render(
+      <RacePane race={null} userId={null} startRace={noop} stopRace={noop} />,
+    )
     expect(screen.getByRole('button', { name: '15s' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '30s' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '60s' })).toBeInTheDocument()
@@ -49,7 +51,14 @@ describe('RacePane', () => {
   it('starts a race with the selected duration', async () => {
     const user = userEvent.setup()
     const startRace = vi.fn()
-    render(<RacePane race={null} startRace={startRace} stopRace={noop} />)
+    render(
+      <RacePane
+        race={null}
+        userId={null}
+        startRace={startRace}
+        stopRace={noop}
+      />,
+    )
     await user.click(screen.getByRole('button', { name: '15s' }))
     await user.click(screen.getByRole('button', { name: /start/i }))
     expect(startRace).toHaveBeenCalledWith(15)
@@ -58,7 +67,14 @@ describe('RacePane', () => {
   it('running: renders the word stream + HUD and a Stop control', async () => {
     const user = userEvent.setup()
     const stopRace = vi.fn()
-    render(<RacePane race={running} startRace={noop} stopRace={stopRace} />)
+    render(
+      <RacePane
+        race={running}
+        userId={null}
+        startRace={noop}
+        stopRace={stopRace}
+      />,
+    )
     expect(screen.getByText('c')).toBeInTheDocument()
     expect(screen.getByText('a')).toBeInTheDocument()
     expect(screen.getByText('t')).toBeInTheDocument()
@@ -68,16 +84,22 @@ describe('RacePane', () => {
     expect(stopRace).toHaveBeenCalled()
   })
 
-  it('finished: shows the results card and records a personal best', () => {
-    render(<RacePane race={finished} startRace={noop} stopRace={noop} />)
+  it('finished: shows the results card and records a personal best', async () => {
+    render(
+      <RacePane race={finished} userId={null} startRace={noop} stopRace={noop} />,
+    )
     expect(screen.getByText('41.2')).toBeInTheDocument()
     expect(screen.getByText('90%')).toBeInTheDocument()
     expect(screen.getByText('78')).toBeInTheDocument()
     const tryAgain = screen.getByRole('button', { name: /try again/i })
     expect(tryAgain).toBeEnabled()
-    expect(
-      JSON.parse(localStorage.getItem('squidspell-race-bests') as string)['30'],
-    ).toBe(41.2)
+    await waitFor(() =>
+      expect(
+        JSON.parse(
+          localStorage.getItem('squidspell-race-bests') as string,
+        )['30'],
+      ).toBe(41.2),
+    )
   })
 
   it('finished: renders an em dash when consistency is null', () => {
@@ -85,28 +107,36 @@ describe('RacePane', () => {
       ...finished,
       results: { spm: 12, accuracy: 1, consistency: null, duration_s: 15 },
     }
-    render(<RacePane race={noGaps} startRace={noop} stopRace={noop} />)
+    render(
+      <RacePane race={noGaps} userId={null} startRace={noop} stopRace={noop} />,
+    )
     expect(screen.getByText('—')).toBeInTheDocument()
   })
 
   it('tolerates a corrupt bests payload and shows no Best line', () => {
     localStorage.setItem('squidspell-race-bests', '[1,2]')
     expect(() =>
-      render(<RacePane race={null} startRace={noop} stopRace={noop} />),
+      render(
+        <RacePane race={null} userId={null} startRace={noop} stopRace={noop} />,
+      ),
     ).not.toThrow()
     expect(screen.queryByText(/Best:/)).toBeNull()
   })
 
   it('shows a dropped-connection banner when a running race vanishes without a local Stop', () => {
     const { rerender } = render(
-      <RacePane race={running} startRace={noop} stopRace={noop} />,
+      <RacePane race={running} userId={null} startRace={noop} stopRace={noop} />,
     )
-    rerender(<RacePane race={null} startRace={noop} stopRace={noop} />)
+    rerender(
+      <RacePane race={null} userId={null} startRace={noop} stopRace={noop} />,
+    )
     expect(
       screen.getByText('Connection dropped — race cancelled.'),
     ).toBeInTheDocument()
 
-    rerender(<RacePane race={running} startRace={noop} stopRace={noop} />)
+    rerender(
+      <RacePane race={running} userId={null} startRace={noop} stopRace={noop} />,
+    )
     expect(
       screen.queryByText('Connection dropped — race cancelled.'),
     ).toBeNull()
@@ -116,10 +146,22 @@ describe('RacePane', () => {
     const user = userEvent.setup()
     const stopRace = vi.fn()
     const { rerender } = render(
-      <RacePane race={running} startRace={noop} stopRace={stopRace} />,
+      <RacePane
+        race={running}
+        userId={null}
+        startRace={noop}
+        stopRace={stopRace}
+      />,
     )
     await user.click(screen.getByRole('button', { name: /stop/i }))
-    rerender(<RacePane race={null} startRace={noop} stopRace={stopRace} />)
+    rerender(
+      <RacePane
+        race={null}
+        userId={null}
+        startRace={noop}
+        stopRace={stopRace}
+      />,
+    )
     expect(
       screen.queryByText('Connection dropped — race cancelled.'),
     ).toBeNull()

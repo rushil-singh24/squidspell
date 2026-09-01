@@ -64,6 +64,7 @@ export function AppShell() {
                 race={prediction.race}
                 startRace={prediction.startRace}
                 stopRace={prediction.stopRace}
+                userId={auth.user?.id ?? null}
               />
             )}
           </PanelSwap>

@@ -1,29 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { RaceSnapshot } from '../types'
+import type { Bests } from '../lib/raceStore'
+import { loadBests, recordRaceResult } from '../lib/raceStore'
 import { SquidMascot } from '../components/SquidMascot'
 import { RaceWordStream } from './RaceWordStream'
 
-const BESTS_KEY = 'squidspell-race-bests'
 const DURATIONS = [15, 30, 60]
-
-type Bests = Record<number, number>
-
-function loadBests(): Bests {
-  try {
-    const raw = localStorage.getItem(BESTS_KEY)
-    if (!raw) return {}
-    const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-    const entries = Object.entries(parsed as Record<string, unknown>)
-    if (!entries.every(([, v]) => typeof v === 'number')) return {}
-    const out: Bests = {}
-    for (const [k, v] of entries) out[Number(k)] = v as number
-    return out
-  } catch {
-    return {}
-  }
-}
 
 const wrap: CSSProperties = {
   height: '100%',
@@ -149,19 +132,33 @@ export function RacePane({
   race,
   startRace,
   stopRace,
+  userId,
 }: {
   race: RaceSnapshot | null
   startRace: (duration: number) => void
   stopRace: () => void
+  userId: string | null
 }) {
   const [selectedDuration, setSelectedDuration] = useState<number>(30)
-  const [bests, setBests] = useState<Bests>(loadBests)
+  const [bests, setBests] = useState<Bests>({})
   const [dismissed, setDismissed] = useState(false)
   const [showCelebrate, setShowCelebrate] = useState(false)
   const [raceCancelled, setRaceCancelled] = useState(false)
   const finishedHandledRef = useRef(false)
   const prevPhase = useRef<string | undefined>(undefined)
   const expectingStop = useRef(false)
+  const userIdRef = useRef(userId)
+  userIdRef.current = userId
+
+  useEffect(() => {
+    let active = true
+    loadBests(userId).then((b) => {
+      if (active) setBests(b)
+    })
+    return () => {
+      active = false
+    }
+  }, [userId])
 
   useEffect(() => {
     if (race?.phase === 'running') {
@@ -176,19 +173,19 @@ export function RacePane({
       !finishedHandledRef.current
     ) {
       finishedHandledRef.current = true
-      const { spm } = race.results
+      const r = race.results
       setShowCelebrate(true)
-      if (spm > (bests[selectedDuration] ?? 0)) {
-        const next = { ...bests, [selectedDuration]: spm }
-        setBests(next)
-        try {
-          localStorage.setItem(BESTS_KEY, JSON.stringify(next))
-        } catch {
-          /* ignore */
-        }
-      }
+      const uid = userIdRef.current
+      void recordRaceResult(uid, {
+        duration_s: selectedDuration,
+        spm: r.spm,
+        accuracy: r.accuracy,
+        consistency: r.consistency,
+      }).then((next) => {
+        if (uid === userIdRef.current) setBests(next)
+      })
     }
-  }, [race?.phase, race?.results, selectedDuration, bests])
+  }, [race?.phase, race?.results, selectedDuration])
 
   // Surface a mid-race socket drop: the server rebuilds a fresh idle RaceState
   // on reconnect, so `race` snaps running -> idle/null with no local Stop.

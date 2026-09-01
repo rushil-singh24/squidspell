@@ -71,7 +71,7 @@ export async function loadTrainHistory(
   return ((data ?? []) as TranslationRow[]).map((row) => ({
     id: row.id,
     text: row.sentence,
-    savedAt: Date.parse(row.created_at),
+    savedAt: Date.parse(row.created_at) || Date.now(),
   }))
 }
 

@@ -100,6 +100,8 @@ export const TrainPane = memo(function TrainPane({
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [history, setHistory] = useState<TrainEntry[]>([])
+  const userIdRef = useRef(userId)
+  userIdRef.current = userId
 
   const empty = transcript === ''
 
@@ -119,7 +121,10 @@ export const TrainPane = memo(function TrainPane({
   }, [userId])
 
   function onSave() {
-    void saveTrainSentence(userId, transcript).then(setHistory)
+    const uid = userId
+    void saveTrainSentence(uid, transcript).then((list) => {
+      if (uid === userIdRef.current) setHistory(list)
+    })
   }
 
   function onDownload() {
@@ -209,9 +214,12 @@ export const TrainPane = memo(function TrainPane({
               <button
                 type="button"
                 aria-label={`Delete saved transcript from ${relativeTime(entry.savedAt)}`}
-                onClick={() =>
-                  void deleteTrainSentence(userId, entry.id).then(setHistory)
-                }
+                onClick={() => {
+                  const uid = userId
+                  void deleteTrainSentence(uid, entry.id).then((list) => {
+                    if (uid === userIdRef.current) setHistory(list)
+                  })
+                }}
                 style={{
                   border: 'none',
                   background: 'transparent',

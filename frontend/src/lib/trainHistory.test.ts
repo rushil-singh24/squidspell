@@ -154,4 +154,29 @@ describe('trainHistory — signed-in (Supabase) path', () => {
     expect(JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]')).toHaveLength(1)
     warn.mockRestore()
   })
+
+  it('warns and falls back to a local delete when delete errors', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    localStorage.setItem(
+      HISTORY_KEY,
+      JSON.stringify([
+        { id: 'local-1', text: 'ONE', savedAt: 1 },
+        { id: 'local-2', text: 'TWO', savedAt: 2 },
+      ]),
+    )
+    const eqDel = vi.fn().mockResolvedValue({ error: { message: 'boom' } })
+    const del = vi.fn(() => ({ eq: eqDel }))
+    mocks.from.mockReturnValue({ delete: del })
+
+    const list = await deleteTrainSentence('user-1', 'local-1')
+
+    expect(warn).toHaveBeenCalled()
+    expect(list.map((e) => e.id)).toEqual(['local-2'])
+    expect(
+      JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]').map(
+        (e: { id: string }) => e.id,
+      ),
+    ).toEqual(['local-2'])
+    warn.mockRestore()
+  })
 })

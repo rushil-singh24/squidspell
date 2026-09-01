@@ -41,7 +41,14 @@ afterEach(() => {
 
 describe('RacePane socket independence', () => {
   it('renders the pre-race UI from props without opening a WebSocket', () => {
-    render(<RacePane race={null} startRace={vi.fn()} stopRace={vi.fn()} />)
+    render(
+      <RacePane
+        race={null}
+        startRace={vi.fn()}
+        stopRace={vi.fn()}
+        userId={null}
+      />,
+    )
     expect(screen.getByRole('button', { name: /start/i })).toBeInTheDocument()
     expect(CountingWS.count).toBe(0)
   })
