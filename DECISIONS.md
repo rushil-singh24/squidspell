@@ -196,7 +196,7 @@ defaults for the live pass, NOT yet validated at a webcam:
   hand is leaving the frame; benign for practice use and self-correcting once the
   vote window fills with `None`, but flagged here as a known edge for the live pass.
 - `MOTION_BUFFER_LEN = 30` frames rolling buffer (~1s at 30fps).
-- `MOTION_MOVEMENT_THRESHOLD = 0.11` (image-normalized centroid displacement
+- `MOTION_MOVEMENT_THRESHOLD = 0.13` (image-normalized centroid displacement
   over the buffer) to arm the gate.
 - `MOTION_STOP_VELOCITY = 0.02` per-frame centroid delta below which the gesture
   is considered finished → classify.
@@ -207,7 +207,7 @@ defaults for the live pass, NOT yet validated at a webcam:
   rather than letting the gate stay wedged until the deque happens to fill.
   Added by the Phase 3 final-review fix wave (a hand that left frame mid-gesture
   previously froze the gate armed, which also suppressed the static path).
-- `MOTION_START_POSES = {"I": "J", "D": "Z", "X": "Z", "U": "Z", "R": "Z", "K": "Z"}` (2026-08-31 live pass: with only `{"D":"Z"}` the Z gate never armed) — the gate only arms if the
+- `MOTION_START_POSES = {"I": "J", "D": "Z", "X": "Z"}` (2026-08-31 live pass: `{"D":"Z"}` alone never armed for Z; U/R/K armed on ordinary static signing and dropped letters) — the gate only arms if the
   buffer's first frame is classified by the *static* model as `I` (→ gates J)
   or `D` (→ gates Z) above `MOTION_START_POSE_CONFIDENCE`, AND centroid
   displacement exceeds the movement threshold. Rationale: J's starting

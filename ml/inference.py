@@ -17,10 +17,9 @@ from dataclasses import dataclass
 
 # --- Static smoothing -------------------------------------------------------
 STATIC_VOTE_WINDOW = 12     # frames in the majority-vote window
-STATIC_STABLE_MS = 800      # majority must hold this long before a letter commits
-                           # (raised from 8/500 after the 2026-08-31 live pass: a
-                           #  handshape passed through between two letters was
-                           #  committing before the signer settled on the target)
+STATIC_STABLE_MS = 650      # majority must hold this long before a letter commits
+                           # (8/500 -> 12/650: wider vote window kills
+                           #  transitional-handshape over-commits; 800ms felt sluggish)
 
 
 def _majority(labels):
@@ -70,20 +69,20 @@ class StaticSmoother:
 
 # --- Motion gating --------------------------------------------------------
 MOTION_BUFFER_LEN = 30            # max frames kept in the rolling buffer (~1s at 30fps)
-MOTION_MOVEMENT_THRESHOLD = 0.11  # centroid displacement over the buffer to arm the gate
-                                 # (0.15 -> 0.11 after the 2026-08-31 live pass: Z's
-                                 #  horizontal zig-zag travels less than J's hook)
+MOTION_MOVEMENT_THRESHOLD = 0.13  # centroid displacement over the buffer to arm the gate
+                                 # (0.15 -> 0.13: Z's zig-zag travels less than J's hook,
+                                 #  but 0.11 armed on incidental drift during static signs)
 MOTION_STOP_VELOCITY = 0.02       # per-frame centroid delta below which motion is "stopped"
 MOTION_MIN_SEGMENT_FRAMES = 5     # frames of motion required before a stop can classify
-MOTION_MIN_CONFIDENCE = 0.6       # min motion-model confidence to commit a J/Z
+MOTION_MIN_CONFIDENCE = 0.65      # min motion-model confidence to commit a J/Z
 MOTION_START_POSE_CONFIDENCE = 0.35  # min static confidence for the start-pose precondition
                                     # (0.5 -> 0.35: the static model never saw J/Z's
                                     #  start poses, so it matches them only weakly)
 # static label the frozen-first-frame handshape is read as -> motion letter it gates.
 # J's start reads cleanly as "I". Z's start is a bare index point the static model
-# (A-I,K-Y only) tends to call D / X / U / R / K; accept any of those to arm a Z
-# (2026-08-31 live pass: with only {"D":"Z"} the Z gate never armed).
-MOTION_START_POSES = {"I": "J", "D": "Z", "X": "Z", "U": "Z", "R": "Z", "K": "Z"}
+# (A-I,K-Y only) reads as D or X. U/R/K were tried too but they are common static
+# letters -- mapping them armed the Z gate on ordinary signing and ate letters.
+MOTION_START_POSES = {"I": "J", "D": "Z", "X": "Z"}
 MOTION_NO_HAND_ABORT = 3  # consecutive no-hand frames while armed -> abandon the gesture
 
 
