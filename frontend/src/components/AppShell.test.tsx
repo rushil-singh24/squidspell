@@ -38,6 +38,15 @@ vi.mock('./WebcamPane', () => ({
   WebcamPane: () => <div data-testid="webcam-pane" />,
 }))
 
+vi.mock('../hooks/useAuth', () => ({
+  useAuth: () => ({
+    user: null,
+    loading: false,
+    signInWithGoogle: vi.fn(),
+    signOut: vi.fn(),
+  }),
+}))
+
 beforeEach(() => {
   mockPrediction.lastError = null
   mockPrediction.race = null

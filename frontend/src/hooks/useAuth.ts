@@ -49,13 +49,19 @@ export function useAuth(): AuthState {
     if (!isSupabaseConfigured || !supabase) return
     let active = true
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return
-      setUser(toAuthUser(data.session))
-      setLoading(false)
-    })
+    supabase.auth.getSession().then(
+      ({ data }) => {
+        if (!active) return
+        setUser(toAuthUser(data.session))
+        setLoading(false)
+      },
+      () => {
+        if (active) setLoading(false)
+      },
+    )
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return
       setUser(toAuthUser(session))
       setLoading(false)
     })

@@ -4,28 +4,12 @@ import { CommitPop } from '../motion/CommitPop'
 import { SquidMascot } from '../components/SquidMascot'
 import { HoldButton } from '../components/HoldButton'
 import type { TranscriptAction } from '../types'
-
-const HISTORY_KEY = 'squidspell-train-history'
-
-type Saved = { id: string; text: string; savedAt: number }
-
-function loadHistory(): Saved[] {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY)
-    const parsed: unknown = raw ? JSON.parse(raw) : []
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (e): e is Saved =>
-        !!e &&
-        typeof e === 'object' &&
-        typeof (e as Saved).id === 'string' &&
-        typeof (e as Saved).text === 'string' &&
-        typeof (e as Saved).savedAt === 'number',
-    )
-  } catch {
-    return []
-  }
-}
+import type { TrainEntry } from '../lib/trainHistory'
+import {
+  loadTrainHistory,
+  saveTrainSentence,
+  deleteTrainSentence,
+} from '../lib/trainHistory'
 
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts
@@ -108,12 +92,14 @@ const historyItem: CSSProperties = {
 export const TrainPane = memo(function TrainPane({
   transcript,
   onAction,
+  userId,
 }: {
   transcript: string
   onAction: (a: TranscriptAction) => void
+  userId: string | null
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const [history, setHistory] = useState<Saved[]>(loadHistory)
+  const [history, setHistory] = useState<TrainEntry[]>([])
 
   const empty = transcript === ''
 
@@ -122,26 +108,18 @@ export const TrainPane = memo(function TrainPane({
     if (el) el.scrollTop = el.scrollHeight
   }, [transcript])
 
-  function persist(next: Saved[]) {
-    setHistory(next)
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
-    } catch {
-      /* ignore */
+  useEffect(() => {
+    let active = true
+    loadTrainHistory(userId).then((list) => {
+      if (active) setHistory(list)
+    })
+    return () => {
+      active = false
     }
-  }
+  }, [userId])
 
   function onSave() {
-    persist([
-      {
-        id:
-          crypto.randomUUID?.() ??
-          `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        text: transcript,
-        savedAt: Date.now(),
-      },
-      ...history,
-    ])
+    void saveTrainSentence(userId, transcript).then(setHistory)
   }
 
   function onDownload() {
@@ -231,7 +209,9 @@ export const TrainPane = memo(function TrainPane({
               <button
                 type="button"
                 aria-label={`Delete saved transcript from ${relativeTime(entry.savedAt)}`}
-                onClick={() => persist(history.filter((h) => h.id !== entry.id))}
+                onClick={() =>
+                  void deleteTrainSentence(userId, entry.id).then(setHistory)
+                }
                 style={{
                   border: 'none',
                   background: 'transparent',

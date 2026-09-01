@@ -57,6 +57,7 @@ export function AppShell() {
               <TrainPane
                 transcript={prediction.transcript}
                 onAction={prediction.sendAction}
+                userId={auth.user?.id ?? null}
               />
             ) : (
               <RacePane

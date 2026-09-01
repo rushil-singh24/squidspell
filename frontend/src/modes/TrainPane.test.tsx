@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TrainPane } from './TrainPane'
 
@@ -33,7 +33,7 @@ function flush(ms: number) {
 
 describe('TrainPane', () => {
   it('shows the empty state with a disabled control set when transcript is blank', () => {
-    render(<TrainPane transcript="" onAction={vi.fn()} />)
+    render(<TrainPane transcript="" onAction={vi.fn()} userId={null} />)
 
     expect(
       screen.getByText('Sign a letter to start your transcript.'),
@@ -49,7 +49,7 @@ describe('TrainPane', () => {
   it('renders the transcript text and fires Space / Delete instantly', async () => {
     const user = userEvent.setup()
     const onAction = vi.fn()
-    render(<TrainPane transcript="HELLO" onAction={onAction} />)
+    render(<TrainPane transcript="HELLO" onAction={onAction} userId={null} />)
 
     expect(screen.getByTestId('train-transcript')).toHaveTextContent('HELLO')
 
@@ -62,7 +62,7 @@ describe('TrainPane', () => {
 
   it('fires clear only after a full hold', () => {
     const onAction = vi.fn()
-    render(<TrainPane transcript="HI" onAction={onAction} />)
+    render(<TrainPane transcript="HI" onAction={onAction} userId={null} />)
 
     fireEvent.pointerDown(screen.getByRole('button', { name: /clear/i }))
     flush(1100)
@@ -73,20 +73,21 @@ describe('TrainPane', () => {
 
   it('saves a transcript to local history and removes it again', async () => {
     const user = userEvent.setup()
-    render(<TrainPane transcript="HI" onAction={vi.fn()} />)
+    render(<TrainPane transcript="HI" onAction={vi.fn()} userId={null} />)
 
     await user.click(screen.getByRole('button', { name: /^save$/i }))
 
-    const item = screen.getByText(/HI/)
-    expect(item).toBeInTheDocument()
-    const stored = JSON.parse(
-      localStorage.getItem('squidspell-train-history') ?? '[]',
-    )
-    expect(Array.isArray(stored)).toBe(true)
-    expect(stored).toHaveLength(1)
+    expect(await screen.findByText(/HI/)).toBeInTheDocument()
+    await waitFor(() => {
+      const stored = JSON.parse(
+        localStorage.getItem('squidspell-train-history') ?? '[]',
+      )
+      expect(Array.isArray(stored)).toBe(true)
+      expect(stored).toHaveLength(1)
+    })
 
     await user.click(screen.getByRole('button', { name: /delete saved transcript/i }))
-    expect(screen.queryByText(/^HI$/)).toBeNull()
+    await waitFor(() => expect(screen.queryByText(/^HI$/)).toBeNull())
     const after = JSON.parse(
       localStorage.getItem('squidspell-train-history') ?? '[]',
     )
@@ -104,7 +105,7 @@ describe('TrainPane', () => {
     } as unknown as typeof URL)
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(click)
 
-    render(<TrainPane transcript="HI" onAction={vi.fn()} />)
+    render(<TrainPane transcript="HI" onAction={vi.fn()} userId={null} />)
     // fireEvent (sync) so we can observe the state right after the handler runs
     fireEvent.click(screen.getByRole('button', { name: /download/i }))
 
@@ -123,16 +124,20 @@ describe('TrainPane', () => {
     const user = userEvent.setup()
     for (const bad of ['{"a":1}', '[1,2,3]']) {
       localStorage.setItem('squidspell-train-history', bad)
-      const { unmount } = render(<TrainPane transcript="HI" onAction={vi.fn()} />)
+      const { unmount } = render(
+        <TrainPane transcript="HI" onAction={vi.fn()} userId={null} />,
+      )
       // renders without throwing; no history list present
       expect(screen.queryByRole('list')).toBeNull()
       await user.click(screen.getByRole('button', { name: /^save$/i }))
-      const stored = JSON.parse(
-        localStorage.getItem('squidspell-train-history') ?? 'null',
-      )
-      expect(Array.isArray(stored)).toBe(true)
-      expect(stored).toHaveLength(1)
-      expect(stored[0]).toMatchObject({ text: 'HI' })
+      await waitFor(() => {
+        const stored = JSON.parse(
+          localStorage.getItem('squidspell-train-history') ?? 'null',
+        )
+        expect(Array.isArray(stored)).toBe(true)
+        expect(stored).toHaveLength(1)
+        expect(stored[0]).toMatchObject({ text: 'HI' })
+      })
       unmount()
       localStorage.clear()
     }
