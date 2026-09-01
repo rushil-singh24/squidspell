@@ -50,6 +50,22 @@ export function AppShell() {
           background: 'var(--sq-bg)',
         }}
       >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <AuthControl
+            user={auth.user}
+            loading={auth.loading}
+            signInWithGoogle={auth.signInWithGoogle}
+            signOut={auth.signOut}
+          />
+          <ThemeToggle />
+        </div>
         <ModeToggle mode={mode} onChange={setMode} />
         <div style={{ flex: 1, minHeight: 0 }}>
           <PanelSwap swapKey={mode}>
@@ -69,26 +85,6 @@ export function AppShell() {
             )}
           </PanelSwap>
         </div>
-      </div>
-
-      <div
-        style={{
-          position: 'absolute',
-          top: 12,
-          right: 12,
-          zIndex: 10,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <AuthControl
-          user={auth.user}
-          loading={auth.loading}
-          signInWithGoogle={auth.signInWithGoogle}
-          signOut={auth.signOut}
-        />
-        <ThemeToggle />
       </div>
 
       {showError && (
