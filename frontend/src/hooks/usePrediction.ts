@@ -55,14 +55,24 @@ export function usePrediction(url: string = WS_URL) {
     setRace(null)
     clientRef.current?.setMode(m)
   }, [])
-  const sendAction = useCallback(
-    (a: TranscriptAction) => clientRef.current?.sendAction(a),
-    [],
-  )
-  const loadTranscript = useCallback(
-    (text: string) => clientRef.current?.sendLoad(text),
-    [],
-  )
+  const sendAction = useCallback((a: TranscriptAction) => {
+    // Optimistically mirror TranscriptBuilder.apply for the deterministic edit
+    // ops so they show with the camera off (no frames arriving). The server
+    // stays authoritative and overwrites with an identical value when frames
+    // resume; a change-only frame with an equal value is simply not delivered.
+    if (a === 'clear') setTranscript('')
+    else if (a === 'delete') setTranscript((t) => t.slice(0, -1))
+    else if (a === 'space')
+      setTranscript((t) => (t && !t.endsWith(' ') ? t + ' ' : t))
+    clientRef.current?.sendAction(a)
+  }, [])
+  const loadTranscript = useCallback((text: string) => {
+    // Optimistic local mirror of TranscriptBuilder.load (uppercase + clamp to
+    // MAX_TRANSCRIPT_CHARS = 2000) so a reopened transcript shows with the
+    // camera off. Server remains authoritative.
+    setTranscript(text.toUpperCase().slice(0, 2000))
+    clientRef.current?.sendLoad(text)
+  }, [])
   const startRace = useCallback(
     (duration: number) => clientRef.current?.sendRace('start', duration),
     [],

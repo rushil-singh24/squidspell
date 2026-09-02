@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useHandLandmarker } from '../hooks/useHandLandmarker'
 import { usePrediction } from '../hooks/usePrediction'
 import { useAuth } from '../hooks/useAuth'
@@ -26,6 +26,27 @@ export function AppShell() {
 
   const showError =
     prediction.lastError !== null && prediction.lastError !== dismissedError
+
+  // Destructure the stable hook callbacks so the memoised handlers below list
+  // plain identifiers as deps (keeps oxlint's react-hooks rule quiet, and keeps
+  // `TrainPane`'s `memo` intact across renders).
+  const { save: saveTranscript } = trainHistory
+  const { sendAction, loadTranscript } = prediction
+
+  // If the Supabase write fails, the transcript is still cleared here, but the
+  // text is preserved in the optimistic history entry (and surfaced to the user
+  // via `trainHistory.error` -> TrainPane's `saveError`).
+  const onSave = useCallback(
+    (text: string) => {
+      saveTranscript(text)
+      sendAction('clear')
+    },
+    [saveTranscript, sendAction],
+  )
+  const onReopen = useCallback(
+    (text: string) => loadTranscript(text),
+    [loadTranscript],
+  )
 
   return (
     <div style={{ position: 'relative', height: '100%', display: 'flex' }}>
@@ -79,12 +100,11 @@ export function AppShell() {
                 onAction={prediction.sendAction}
                 userId={auth.user?.id ?? null}
                 entries={trainHistory.entries}
-                onSave={(text) => {
-                  trainHistory.save(text)
-                  prediction.sendAction('clear')
-                }}
+                onSave={onSave}
                 onDelete={trainHistory.remove}
-                onReopen={(text) => prediction.loadTranscript(text)}
+                onReopen={onReopen}
+                saveError={trainHistory.error}
+                onDismissSaveError={trainHistory.clearError}
               />
             ) : (
               <RacePane

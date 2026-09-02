@@ -185,10 +185,16 @@ export function RacePane({
         spm: r.spm,
         accuracy: r.accuracy,
         consistency: r.consistency,
-      }).then((next) => {
-        // null = a signed-in Supabase write/re-read failed; keep current bests.
-        if (next && uid === userIdRef.current) setBests(next)
-      })
+      }).then(
+        (next) => {
+          // null = a signed-in Supabase write/re-read failed; keep current bests.
+          if (next && uid === userIdRef.current) setBests(next)
+        },
+        // recordRaceResult now rejects on a Supabase error. A failed best-write
+        // is non-critical — swallow it so it doesn't become an unhandled
+        // promise rejection / crash the finished-race screen.
+        () => {},
+      )
     }
   }, [race?.phase, race?.results, selectedDuration])
 

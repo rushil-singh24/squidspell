@@ -49,8 +49,7 @@ export async function saveTrainSentence(
     .insert({ user_id: userId, sentence: text })
 
   if (error) {
-    console.warn('[trainHistory] save failed; keeping current state', error)
-    return null
+    throw new Error(error.message || error.details || JSON.stringify(error))
   }
 
   return loadTrainHistory(userId)
@@ -71,8 +70,7 @@ export async function deleteTrainSentence(
     .eq('user_id', userId)
 
   if (error) {
-    console.warn('[trainHistory] delete failed; keeping current state', error)
-    return null
+    throw new Error(error.message || error.details || JSON.stringify(error))
   }
 
   return loadTrainHistory(userId)

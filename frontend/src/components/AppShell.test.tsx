@@ -37,36 +37,46 @@ vi.mock('../hooks/usePrediction', () => ({
   usePrediction: () => mockPrediction,
 }))
 
+const mockTrainHistory = {
+  entries: [{ id: 'r1', text: 'HELLO WORLD', savedAt: 1000 }],
+  save: vi.fn(),
+  remove: vi.fn(),
+  error: null as string | null,
+  clearError: vi.fn(),
+}
+
 vi.mock('../hooks/useTrainHistory', () => ({
-  useTrainHistory: () => ({
-    entries: [],
-    save: vi.fn(),
-    remove: vi.fn(),
-    reload: vi.fn(),
-  }),
+  useTrainHistory: () => mockTrainHistory,
 }))
 
 vi.mock('./WebcamPane', () => ({
   WebcamPane: () => <div data-testid="webcam-pane" />,
 }))
 
+const mockAuth = {
+  user: null as { id: string } | null,
+  loading: false,
+  signInWithGoogle: vi.fn(),
+  signOut: vi.fn(),
+}
+
 vi.mock('../hooks/useAuth', () => ({
-  useAuth: () => ({
-    user: null,
-    loading: false,
-    signInWithGoogle: vi.fn(),
-    signOut: vi.fn(),
-  }),
+  useAuth: () => mockAuth,
 }))
 
 beforeEach(() => {
   mockPrediction.lastError = null
   mockPrediction.race = null
+  mockPrediction.transcript = ''
   mockPrediction.sendLandmarks.mockClear()
   mockPrediction.setMode.mockClear()
   mockPrediction.sendAction.mockClear()
+  mockPrediction.loadTranscript.mockClear()
   mockPrediction.startRace.mockClear()
   mockPrediction.stopRace.mockClear()
+  mockTrainHistory.save.mockClear()
+  mockTrainHistory.remove.mockClear()
+  mockAuth.user = null
   vi.mocked(useHandLandmarker).mockClear()
 })
 
@@ -109,5 +119,28 @@ describe('AppShell', () => {
   it('wires the prediction send callback into the hand landmarker hook', () => {
     render(<AppShell />)
     expect(useHandLandmarker).toHaveBeenCalledWith(mockPrediction.sendLandmarks)
+  })
+
+  it('Save in Train mode calls trainHistory.save(transcript) AND sendAction("clear")', async () => {
+    const user = userEvent.setup()
+    mockAuth.user = { id: 'user-1' }
+    mockPrediction.transcript = 'HELLO WORLD'
+    render(<AppShell />)
+
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    expect(mockTrainHistory.save).toHaveBeenCalledWith('HELLO WORLD')
+    expect(mockPrediction.sendAction).toHaveBeenCalledWith('clear')
+  })
+
+  it('clicking a saved entry calls prediction.loadTranscript with its text', async () => {
+    const user = userEvent.setup()
+    mockAuth.user = { id: 'user-1' }
+    render(<AppShell />)
+
+    await user.click(screen.getByRole('button', { name: /^saved/i }))
+    await user.click(screen.getByRole('button', { name: 'HELLO WORLD' }))
+
+    expect(mockPrediction.loadTranscript).toHaveBeenCalledWith('HELLO WORLD')
   })
 })

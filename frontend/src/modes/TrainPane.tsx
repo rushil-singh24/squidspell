@@ -111,6 +111,8 @@ export const TrainPane = memo(function TrainPane({
   onSave,
   onDelete,
   onReopen,
+  saveError,
+  onDismissSaveError,
 }: {
   transcript: string
   onAction: (a: TranscriptAction) => void
@@ -119,6 +121,8 @@ export const TrainPane = memo(function TrainPane({
   onSave: (text: string) => void
   onDelete: (id: string) => void
   onReopen: (text: string) => void
+  saveError?: string | null
+  onDismissSaveError?: () => void
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [showSaved, setShowSaved] = useState(false)
@@ -147,17 +151,22 @@ export const TrainPane = memo(function TrainPane({
         el.closest('button, input, textarea, select, [contenteditable="true"]')
       )
         return
+      // The Saved panel hides the live transcript — don't mutate it from under
+      // the user while they're browsing saved entries.
+      if (showSaved) return
       if (e.key === ' ') {
         e.preventDefault()
         onAction('space')
       } else if (e.key === 'Backspace') {
+        // Matches the disabled on-screen Delete button: nothing to delete.
+        if (transcript === '') return
         e.preventDefault()
         onAction('delete')
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onAction])
+  }, [onAction, showSaved, transcript])
 
   function onDownload() {
     const url = URL.createObjectURL(new Blob([transcript], { type: 'text/plain' }))
@@ -264,6 +273,42 @@ export const TrainPane = memo(function TrainPane({
         <div ref={scrollRef} style={panel} data-testid="train-transcript">
           {head}
           <CommitPop trigger={transcript.length}>{tail}</CommitPop>
+        </div>
+      )}
+
+      {saveError && (
+        <div
+          role="alert"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.5rem',
+            padding: '0.375rem 0.625rem',
+            borderRadius: '0.375rem',
+            background: 'var(--sq-error)',
+            color: 'var(--sq-bg-deep)',
+            fontSize: '0.8125rem',
+          }}
+        >
+          <span>Couldn’t save: {saveError}</span>
+          <button
+            type="button"
+            aria-label="Dismiss save error"
+            onClick={onDismissSaveError}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: 'inherit',
+              cursor: 'pointer',
+              fontWeight: 700,
+              fontSize: '1rem',
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            ×
+          </button>
         </div>
       )}
 

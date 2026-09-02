@@ -80,6 +80,21 @@ describe('useTrainHistory', () => {
     expect(result.current.entries[0]).toMatchObject({ text: 'KEEP ME' })
   })
 
+  it('surfaces a rejected save as `error` and keeps the optimistic entry', async () => {
+    save.mockRejectedValue(new Error('write failed'))
+    const { result } = renderHook(() => useTrainHistory('user-1'))
+    await waitFor(() => expect(load).toHaveBeenCalled())
+
+    act(() => result.current.save('keep me'))
+    expect(result.current.entries[0]).toMatchObject({ text: 'KEEP ME' })
+
+    await waitFor(() => expect(result.current.error).toBe('write failed'))
+    expect(result.current.entries[0]).toMatchObject({ text: 'KEEP ME' })
+
+    act(() => result.current.clearError())
+    expect(result.current.error).toBeNull()
+  })
+
   it('remove is optimistic', async () => {
     load.mockResolvedValue([entry({ id: 'a' }), entry({ id: 'b' })])
     del.mockResolvedValue(null)

@@ -109,20 +109,17 @@ describe('raceStore — signed-in (Supabase) path', () => {
     warn.mockRestore()
   })
 
-  it('recordRaceResult returns null when the insert errors', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('recordRaceResult throws when the insert errors', async () => {
     const insert = vi.fn().mockResolvedValue({ error: { message: 'nope' } })
     mocks.from.mockReturnValue({ insert })
 
-    const bests = await recordRaceResult('user-1', {
-      duration_s: 15,
-      spm: 30,
-      accuracy: null,
-      consistency: null,
-    })
-
-    expect(warn).toHaveBeenCalled()
-    expect(bests).toBeNull()
-    warn.mockRestore()
+    await expect(
+      recordRaceResult('user-1', {
+        duration_s: 15,
+        spm: 30,
+        accuracy: null,
+        consistency: null,
+      }),
+    ).rejects.toThrow('nope')
   })
 })

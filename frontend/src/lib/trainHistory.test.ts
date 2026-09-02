@@ -113,29 +113,19 @@ describe('trainHistory — signed-in (Supabase) path', () => {
     warn.mockRestore()
   })
 
-  it('returns null when insert errors', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('throws when insert errors', async () => {
     const insert = vi.fn().mockResolvedValue({ error: { message: 'nope' } })
     mocks.from.mockReturnValue({ insert })
 
-    const list = await saveTrainSentence('user-1', 'FALLBACK')
-
-    expect(warn).toHaveBeenCalled()
-    expect(list).toBeNull()
-    warn.mockRestore()
+    await expect(saveTrainSentence('user-1', 'FALLBACK')).rejects.toThrow('nope')
   })
 
-  it('returns null when delete errors', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('throws when delete errors', async () => {
     const eqUser = vi.fn().mockResolvedValue({ error: { message: 'boom' } })
     const eqId = vi.fn(() => ({ eq: eqUser }))
     const del = vi.fn(() => ({ eq: eqId }))
     mocks.from.mockReturnValue({ delete: del })
 
-    const list = await deleteTrainSentence('user-1', 'local-1')
-
-    expect(warn).toHaveBeenCalled()
-    expect(list).toBeNull()
-    warn.mockRestore()
+    await expect(deleteTrainSentence('user-1', 'local-1')).rejects.toThrow('boom')
   })
 })

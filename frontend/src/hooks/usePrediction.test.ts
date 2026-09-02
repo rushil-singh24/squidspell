@@ -93,6 +93,23 @@ describe('usePrediction', () => {
     expect(result.current.transcript).toBe('HI')
   })
 
+  it('sendAction("clear") clears the local transcript with no frame', () => {
+    const { result } = renderHook(() => usePrediction('ws://test'))
+    act(() => FakeWS.last!._open())
+    act(() => FakeWS.last!._msg({ ...evt, transcript: 'HI' }))
+    expect(result.current.transcript).toBe('HI')
+
+    act(() => result.current.sendAction('clear'))
+    expect(result.current.transcript).toBe('')
+  })
+
+  it('loadTranscript sets the local transcript uppercased with no frame', () => {
+    const { result } = renderHook(() => usePrediction('ws://test'))
+    act(() => FakeWS.last!._open())
+    act(() => result.current.loadTranscript('hi there'))
+    expect(result.current.transcript).toBe('HI THERE')
+  })
+
   it('clears the local transcript on a mode change', () => {
     const { result } = renderHook(() => usePrediction('ws://test'))
     act(() => FakeWS.last!._open())

@@ -56,8 +56,7 @@ export async function recordRaceResult(
   })
 
   if (error) {
-    console.warn('[raceStore] record failed; keeping current state', error)
-    return null
+    throw new Error(error.message || error.details || JSON.stringify(error))
   }
 
   return loadBests(userId)
