@@ -59,10 +59,11 @@ export function AuthControl({ user, loading, signInWithGoogle, signOut }: Props)
       <div style={boxStyle}>
         <button
           type="button"
+          aria-label="Sign in with Google"
           style={buttonStyle}
           onClick={() => void signInWithGoogle()}
         >
-          Sign in with Google
+          Sign in with Google to save your progress
         </button>
       </div>
     )

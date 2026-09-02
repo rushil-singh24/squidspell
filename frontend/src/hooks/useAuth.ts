@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { upsertProfile } from '../lib/profile'
 
 /**
  * Normalised view of the signed-in Supabase user. `name` / `avatarUrl` come
@@ -52,8 +53,12 @@ export function useAuth(): AuthState {
     supabase.auth.getSession().then(
       ({ data }) => {
         if (!active) return
-        setUser(toAuthUser(data.session))
+        const u = toAuthUser(data.session)
+        setUser(u)
         setLoading(false)
+        // Fire-and-forget: keep the public `profiles` row current for the
+        // leaderboard. Never block auth on it.
+        if (u) void upsertProfile(u)
       },
       () => {
         if (active) setLoading(false)
@@ -62,8 +67,10 @@ export function useAuth(): AuthState {
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return
-      setUser(toAuthUser(session))
+      const u = toAuthUser(session)
+      setUser(u)
       setLoading(false)
+      if (u) void upsertProfile(u)
     })
 
     return () => {

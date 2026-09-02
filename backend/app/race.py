@@ -12,7 +12,7 @@ import math
 import random
 import statistics
 
-RACE_DURATIONS: tuple[int, ...] = (15, 30, 60)
+RACE_DURATIONS: tuple[int, ...] = (30, 60, 90)
 
 RACE_WORDS: tuple[str, ...] = (
     "cat", "dog", "run", "the", "and", "you", "for", "are", "sun", "day",

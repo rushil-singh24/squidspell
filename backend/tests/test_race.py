@@ -5,14 +5,14 @@ from app.race import RaceState, RACE_DURATIONS, RACE_WORDS
 def test_word_pool_is_reasonable():
     assert len(RACE_WORDS) >= 20
     assert all(w.islower() and 2 <= len(w) <= 5 for w in RACE_WORDS)
-    assert RACE_DURATIONS == (15, 30, 60)
+    assert RACE_DURATIONS == (30, 60, 90)
 
 
 def test_start_requires_valid_duration():
     r = RaceState(seed=1)
     with pytest.raises(ValueError):
         r.start(45, 0)
-    r.start(15, 0)
+    r.start(30, 0)
     assert r.phase == "running"
 
 
@@ -50,41 +50,41 @@ def test_wrong_letter_does_not_advance_but_counts_as_attempt():
 
 
 def test_tick_finishes_race_and_produces_results():
-    r = RaceState(seed=3); r.start(15, 0)
+    r = RaceState(seed=3); r.start(30, 0)
     word = r.snapshot(0)["target_word"]
     t = 0
     for ch in word:
         t += 200
         r.commit_letter(ch, t)
-    r.tick(15_000)
-    snap = r.snapshot(15_000)
+    r.tick(30_000)
+    snap = r.snapshot(30_000)
     assert snap["phase"] == "finished"
     res = snap["results"]
     assert res is not None
-    assert res["spm"] == pytest.approx(len(word) / (15 / 60), rel=1e-3)
+    assert res["spm"] == pytest.approx(len(word) / (30 / 60), rel=1e-3)
     assert 0.0 <= res["accuracy"] <= 1.0
     assert isinstance(res["consistency"], float)
     assert 0.0 <= res["consistency"] <= 100.0
-    assert res["duration_s"] == 15
+    assert res["duration_s"] == 30
 
 
 def test_results_consistency_is_none_with_under_two_gaps():
-    r = RaceState(seed=3); r.start(15, 0)
+    r = RaceState(seed=3); r.start(30, 0)
     word = r.snapshot(0)["target_word"]
     r.commit_letter(word[0], 200)  # one commit -> zero gaps
-    r.tick(15_000)
-    res = r.snapshot(15_000)["results"]
+    r.tick(30_000)
+    res = r.snapshot(30_000)["results"]
     assert res["consistency"] is None
-    assert res["duration_s"] == 15
+    assert res["duration_s"] == 30
 
 
 def test_commit_ignored_before_start_and_after_finish():
     r = RaceState(seed=1)
     r.commit_letter("a", 0)                 # idle -> ignored
     assert r.snapshot(0)["attempted_letters"] == 0
-    r.start(15, 0); r.tick(20_000)
-    r.commit_letter("a", 21_000)            # finished -> ignored
-    assert r.snapshot(21_000)["attempted_letters"] == 0
+    r.start(30, 0); r.tick(40_000)
+    r.commit_letter("a", 41_000)            # finished -> ignored
+    assert r.snapshot(41_000)["attempted_letters"] == 0
 
 
 def test_seconds_left_counts_down():

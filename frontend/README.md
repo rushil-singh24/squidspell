@@ -84,7 +84,7 @@ data-collection pass so they stay visually distinct from the 26 letters. See
 The right-hand pane in Race mode (`src/modes/RacePane.tsx`) is a timed
 fingerspelling sprint:
 
-- Pick **15 / 30 / 60 seconds**, then **Start**.
+- Pick **30 / 60 / 90 seconds**, then **Start**.
 - Sign the highlighted word one letter at a time, MonkeyType-style — done
   letters, the cursor, and pending letters are marked as you go, with the next
   few words dimmed ahead. A **wrong letter simply doesn't advance** — there is no

@@ -3,7 +3,7 @@
 **Last updated:** Phase 7 (Mode B: Race) code + documentation complete and committed
 (2026-08-30). `/ws/predict` now also handles `mode == "race"`: the connection keeps a
 per-connection `RaceState` (`backend/app/race.py`, pure) alongside the engine, driven by inbound
-`{"race":"start","duration":15|30|60}` / `{"race":"stop"}` (a bad or unknown `race` message →
+`{"race":"start","duration":30|60|90}` / `{"race":"stop"}` (a bad or unknown `race` message →
 `{"error": ...}`, socket stays open); committed letters are matched against the current target
 word server-side, and `RaceState.tick` runs every frame so a round finalises on expiry without a
 client `stop`. `transcript` and `race` are now **change-only** in the outbound frame — the
@@ -11,7 +11,7 @@ current value on the first frame each changes, `null` on frames where it did not
 keeps its last non-null value; `RaceState.snapshot()` integer-rounds `spm` and `seconds_left` so
 a steady race yields equal snapshot dicts. On the frontend, `PredictionClient`/`usePrediction`
 expose `race` + `startRace(d)` / `stopRace()`, and `frontend/src/modes/RacePane.tsx` (replacing
-`RacePanePlaceholder`) renders the pre-race 15/30/60 picker + "Best: N SPM", the running HUD
+`RacePanePlaceholder`) renders the pre-race 30/60/90 picker + "Best: N SPM", the running HUD
 (`{seconds_left}s`, `SPM {spm}`, `RaceWordStream` MonkeyType-style word display, Stop), and the
 results screen (SPM / accuracy% / consistency, a brief `SquidMascot mood="celebrate"`, Try
 Again), with a per-duration personal best in `localStorage["squidspell-race-bests"]`

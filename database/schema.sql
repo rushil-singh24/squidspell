@@ -152,3 +152,43 @@ select
 where not exists (
   select 1 from public.models where version = '2026-08-19' and kind = 'motion'
 );
+
+-- ---------------------------------------------------------------------------
+-- Public leaderboard (Race mode)
+--
+-- The Race-mode leaderboard is READ-ONLY-PUBLIC by design: anyone, including
+-- signed-out / anon visitors, may SELECT every row of `race_results` and every
+-- row of `profiles`. Writes are unchanged -- the owner policies above still
+-- restrict INSERT/UPDATE/DELETE to `auth.uid() = user_id` / `= id`.
+--
+-- `profiles.email` is therefore world-readable through the `profiles_public_read`
+-- policy. That is an accepted trade-off at portfolio scale (a public demo whose
+-- only PII is a Google display name + email the user already chose to sign in
+-- with); a production build would drop `email` from the public policy or split
+-- it into a separate owner-only table.
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.profiles (
+  id           uuid primary key references auth.users on delete cascade,
+  display_name text,
+  email        text,
+  updated_at   timestamptz not null default now()
+);
+alter table public.profiles enable row level security;
+
+drop policy if exists "profiles_public_read" on public.profiles;
+create policy "profiles_public_read" on public.profiles
+  for select using (true);
+
+drop policy if exists "profiles_owner_write" on public.profiles;
+create policy "profiles_owner_write" on public.profiles
+  for all using (auth.uid() = id) with check (auth.uid() = id);
+
+-- Leaderboard: anyone (incl. anon) may read race scores. Owner policy above
+-- still governs writes.
+drop policy if exists "race_results_public_read" on public.race_results;
+create policy "race_results_public_read" on public.race_results
+  for select using (true);
+
+grant select on public.profiles to anon, authenticated;
+grant select, insert, update, delete on public.profiles to authenticated;

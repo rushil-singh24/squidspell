@@ -546,7 +546,7 @@ starting point.
 ## [Phase 7] Server-authoritative Race on the same `/ws/predict` mode switch as Train
 Decided: `mode == "race"` gives the connection a per-connection `RaceState`
 (`backend/app/race.py`, pure) alongside the existing engine, exactly parallel to
-Train's `TranscriptBuilder`. Inbound `{"race":"start","duration":15|30|60}` starts
+Train's `TranscriptBuilder`. Inbound `{"race":"start","duration":30|60|90}` starts
 a round (any other duration → `ValueError` → `{"error": ...}`, socket stays open)
 and `{"race":"stop"}` ends one early; a bad or unknown `race` message gets an
 `{"error": ...}` reply and the socket stays open. Committed letters from the
@@ -593,13 +593,13 @@ signed during the round, clamped to 0..100, and `0.0` when fewer than 2 letters
 were signed. 100 means a perfectly even signing cadence; a jittery cadence pulls
 it down. It is displayed as a number out of 100.
 Why: A single dimensionless evenness score is more legible than raw gap variance
-and is duration-independent, so it reads the same for a 15s and a 60s round.
+and is duration-independent, so it reads the same for a 30s and a 90s round.
 Affects: `frontend/README.md`'s Race-mode section documents it; Phase 8's
 `race_results` schema stores it as a number.
 
 ## [Phase 7] Personal bests are client-only
 Decided: Best SPM per duration lives only in the browser, in
-`localStorage["squidspell-race-bests"]` as `{15,30,60 → SPM}`. It is
+`localStorage["squidspell-race-bests"]` as `{30,60,90 → SPM}`. It is
 shape-validated on load — a plain object whose present values are numbers,
 anything else falls back to `{}` — and a finished round writes its bucket only
 when it beats the stored value.

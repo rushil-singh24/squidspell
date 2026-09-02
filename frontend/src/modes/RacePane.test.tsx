@@ -4,10 +4,17 @@ import userEvent from '@testing-library/user-event'
 import { RacePane } from './RacePane'
 import type { RaceSnapshot } from '../types'
 import { loadBests, recordRaceResult } from '../lib/raceStore'
+import { loadLeaderboard } from '../lib/leaderboard'
 
 vi.mock('../lib/raceStore', () => ({
   loadBests: vi.fn().mockResolvedValue({}),
   recordRaceResult: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('../lib/leaderboard', () => ({
+  loadLeaderboard: vi
+    .fn()
+    .mockResolvedValue({ 30: [], 60: [], 90: [] }),
 }))
 
 const noop = () => {}
@@ -16,6 +23,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(loadBests).mockResolvedValue({})
   vi.mocked(recordRaceResult).mockResolvedValue(null)
+  vi.mocked(loadLeaderboard).mockResolvedValue({ 30: [], 60: [], 90: [] })
 })
 
 const running: RaceSnapshot = {
@@ -49,9 +57,9 @@ describe('RacePane', () => {
     render(
       <RacePane race={null} userId={null} startRace={noop} stopRace={noop} />,
     )
-    expect(screen.getByRole('button', { name: '15s' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '30s' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '60s' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '90s' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /start/i })).toBeInTheDocument()
     expect(screen.getByRole('img')).toBeInTheDocument()
   })
@@ -67,9 +75,9 @@ describe('RacePane', () => {
         stopRace={noop}
       />,
     )
-    await user.click(screen.getByRole('button', { name: '15s' }))
+    await user.click(screen.getByRole('button', { name: '90s' }))
     await user.click(screen.getByRole('button', { name: /start/i }))
-    expect(startRace).toHaveBeenCalledWith(15)
+    expect(startRace).toHaveBeenCalledWith(90)
   })
 
   it('running: renders the word stream + HUD and a Stop control', async () => {
@@ -120,7 +128,7 @@ describe('RacePane', () => {
   it('finished: renders an em dash when consistency is null', () => {
     const noGaps: RaceSnapshot = {
       ...finished,
-      results: { spm: 12, accuracy: 1, consistency: null, duration_s: 15 },
+      results: { spm: 12, accuracy: 1, consistency: null, duration_s: 30 },
     }
     render(
       <RacePane race={noGaps} userId={null} startRace={noop} stopRace={noop} />,
@@ -143,6 +151,30 @@ describe('RacePane', () => {
       <RacePane race={null} userId="user-1" startRace={noop} stopRace={noop} />,
     )
     expect(await screen.findByText('Best: 55 SPM')).toBeInTheDocument()
+  })
+
+  it('opens the leaderboard, shows a section per duration, and ✕ returns to the picker', async () => {
+    const user = userEvent.setup()
+    vi.mocked(loadLeaderboard).mockResolvedValue({
+      30: [{ name: 'Ada', spm: 50, duration_s: 30, createdAt: 1 }],
+      60: [],
+      90: [],
+    })
+    render(
+      <RacePane race={null} userId={null} startRace={noop} stopRace={noop} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /leaderboard/i }))
+    expect(loadLeaderboard).toHaveBeenCalled()
+
+    expect(await screen.findByText('Ada')).toBeInTheDocument()
+    expect(screen.getByText('30s')).toBeInTheDocument()
+    expect(screen.getByText('60s')).toBeInTheDocument()
+    expect(screen.getByText('90s')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /close leaderboard/i }))
+    expect(screen.getByRole('button', { name: /start/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '30s' })).toBeInTheDocument()
   })
 
   it('shows a dropped-connection banner when a running race vanishes without a local Stop', () => {

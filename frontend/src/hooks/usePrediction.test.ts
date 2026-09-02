@@ -150,10 +150,10 @@ describe('usePrediction', () => {
   it('startRace and stopRace send through to the client', () => {
     const { result } = renderHook(() => usePrediction('ws://test'))
     act(() => FakeWS.last!._open())
-    act(() => result.current.startRace(15))
+    act(() => result.current.startRace(30))
     act(() => result.current.stopRace())
     const payloads = FakeWS.last!.sent.map((s) => JSON.parse(s))
-    expect(payloads).toContainEqual({ race: 'start', duration: 15 })
+    expect(payloads).toContainEqual({ race: 'start', duration: 30 })
     expect(payloads).toContainEqual({ race: 'stop' })
   })
 

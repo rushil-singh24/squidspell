@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useAuth } from './useAuth'
+import { upsertProfile } from '../lib/profile'
+
+vi.mock('../lib/profile', () => ({ upsertProfile: vi.fn() }))
 
 const mocks = vi.hoisted(() => ({
   configured: { value: true },
@@ -80,6 +83,36 @@ describe('useAuth', () => {
 
     act(() => cb('SIGNED_OUT', null))
     expect(result.current.user).toBeNull()
+  })
+
+  it('upserts the public profile row when a session resolves on load', async () => {
+    mocks.auth.getSession.mockResolvedValue({ data: { session: session() } })
+    renderHook(() => useAuth())
+
+    await waitFor(() =>
+      expect(vi.mocked(upsertProfile)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'u1',
+          email: 'ada@ex.com',
+          name: 'Ada Lovelace',
+        }),
+      ),
+    )
+  })
+
+  it('upserts the public profile row on a SIGNED_IN event', async () => {
+    const { result } = renderHook(() => useAuth())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const cb = mocks.auth.onAuthStateChange.mock.calls[0][0] as (
+      event: string,
+      s: unknown,
+    ) => void
+    act(() => cb('SIGNED_IN', session()))
+
+    expect(vi.mocked(upsertProfile)).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'u1' }),
+    )
   })
 
   it('unsubscribes on unmount', async () => {

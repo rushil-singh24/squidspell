@@ -234,7 +234,7 @@ def test_ws_race_snapshot_appears_on_start(ws_app):
     with TestClient(ws_app) as c:
         with c.websocket_connect("/ws/predict") as ws:
             ws.send_json({"mode": "race"})
-            ws.send_json({"race": "start", "duration": 15})
+            ws.send_json({"race": "start", "duration": 30})
             ws.send_json({"landmarks": None})
             msg = ws.receive_json()
     assert isinstance(msg["race"], dict)
@@ -243,15 +243,15 @@ def test_ws_race_snapshot_appears_on_start(ws_app):
 
 
 def test_ws_race_expiry_produces_results(ws_app, monkeypatch):
-    # 5s per monotonic() call: a few frames after start push past the 15s
+    # 10s per monotonic() call: a few frames after start push past the 30s
     # duration so tick() finalises. (Starlette's TestClient itself consumes
     # monotonic() ticks, so tests assert phases, not exact tick arithmetic.)
-    ticks = iter(range(0, 100_000_000, 5_000))
+    ticks = iter(range(0, 100_000_000, 10_000))
     monkeypatch.setattr("app.main.time.monotonic", lambda: next(ticks) / 1000.0)
     with TestClient(ws_app) as c:
         with c.websocket_connect("/ws/predict") as ws:
             ws.send_json({"mode": "race"})
-            ws.send_json({"race": "start", "duration": 15})
+            ws.send_json({"race": "start", "duration": 30})
             race = None
             for _ in range(12):
                 ws.send_json({"landmarks": None})
@@ -266,12 +266,12 @@ def test_ws_race_expiry_produces_results(ws_app, monkeypatch):
 
 
 def test_ws_race_finished_snapshot_is_stable_and_not_resent(ws_app, monkeypatch):
-    ticks = iter(range(0, 100_000_000, 5_000))
+    ticks = iter(range(0, 100_000_000, 10_000))
     monkeypatch.setattr("app.main.time.monotonic", lambda: next(ticks) / 1000.0)
     with TestClient(ws_app) as c:
         with c.websocket_connect("/ws/predict") as ws:
             ws.send_json({"mode": "race"})
-            ws.send_json({"race": "start", "duration": 15})
+            ws.send_json({"race": "start", "duration": 30})
             finished_seen = False
             for _ in range(12):
                 ws.send_json({"landmarks": None})
@@ -290,7 +290,7 @@ def test_ws_race_finished_snapshot_is_stable_and_not_resent(ws_app, monkeypatch)
 def test_ws_bad_race_command_errors_keep_open(ws_app):
     with TestClient(ws_app) as c:
         with c.websocket_connect("/ws/predict") as ws:
-            ws.send_json({"race": "start", "duration": 15})  # race mode not set
+            ws.send_json({"race": "start", "duration": 30})  # race mode not set
             assert ws.receive_json()["error"] == "race command outside race mode"
             ws.send_json({"mode": "race"})
             ws.send_json({"race": "start"})  # no duration
@@ -310,7 +310,7 @@ def test_ws_race_and_transcript_null_in_wrong_mode(ws_app, monkeypatch):
     with TestClient(ws_app) as c:
         with c.websocket_connect("/ws/predict") as ws:
             ws.send_json({"mode": "race"})
-            ws.send_json({"race": "start", "duration": 15})
+            ws.send_json({"race": "start", "duration": 30})
             for _ in range(6):
                 ws.send_json({"landmarks": _frame()})
                 assert ws.receive_json()["transcript"] is None

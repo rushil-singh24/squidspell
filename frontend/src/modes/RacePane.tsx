@@ -5,8 +5,10 @@ import type { Bests } from '../lib/raceStore'
 import { loadBests, recordRaceResult } from '../lib/raceStore'
 import { SquidMascot } from '../components/SquidMascot'
 import { RaceWordStream } from './RaceWordStream'
+import { LeaderboardPanel } from './LeaderboardPanel'
+import { loadLeaderboard, type LeaderRow } from '../lib/leaderboard'
 
-const DURATIONS = [15, 30, 60]
+const DURATIONS = [30, 60, 90]
 
 const wrap: CSSProperties = {
   height: '100%',
@@ -64,6 +66,17 @@ const segButtonActive: CSSProperties = {
   color: 'var(--sq-fg)',
   background: 'var(--sq-surface-raised)',
   borderColor: 'var(--sq-border)',
+}
+
+const secondaryButton: CSSProperties = {
+  borderRadius: '0.5rem',
+  padding: '0.5rem 0.75rem',
+  fontSize: '0.875rem',
+  lineHeight: 1.2,
+  color: 'var(--sq-fg)',
+  background: 'var(--sq-surface)',
+  border: '1px solid var(--sq-border)',
+  cursor: 'pointer',
 }
 
 const primaryButton: CSSProperties = {
@@ -141,6 +154,13 @@ export function RacePane({
 }) {
   const [selectedDuration, setSelectedDuration] = useState<number>(30)
   const [bests, setBests] = useState<Bests>({})
+  const [showBoard, setShowBoard] = useState(false)
+  const [board, setBoard] = useState<Record<number, LeaderRow[]>>({
+    30: [],
+    60: [],
+    90: [],
+  })
+  const [boardLoading, setBoardLoading] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [showCelebrate, setShowCelebrate] = useState(false)
   const [raceCancelled, setRaceCancelled] = useState(false)
@@ -288,6 +308,21 @@ export function RacePane({
   }
 
   const best = bests[selectedDuration]
+
+  // Pre-race / idle only: the running + finished phases return above, so
+  // `showBoard` is deliberately ignored while a race is in progress.
+  if (showBoard) {
+    return (
+      <div style={wrap}>
+        <LeaderboardPanel
+          data={board}
+          loading={boardLoading}
+          onClose={() => setShowBoard(false)}
+        />
+      </div>
+    )
+  }
+
   return (
     <div style={wrap}>
       <div style={center}>
@@ -314,13 +349,29 @@ export function RacePane({
         {userId != null && best !== undefined && (
           <p style={bestLine}>Best: {best} SPM</p>
         )}
-        <button
-          type="button"
-          style={primaryButton}
-          onClick={() => startRace(selectedDuration)}
-        >
-          Start
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button
+            type="button"
+            style={secondaryButton}
+            onClick={() => {
+              setShowBoard(true)
+              setBoardLoading(true)
+              void loadLeaderboard().then((d) => {
+                setBoard(d)
+                setBoardLoading(false)
+              })
+            }}
+          >
+            Leaderboard
+          </button>
+          <button
+            type="button"
+            style={primaryButton}
+            onClick={() => startRace(selectedDuration)}
+          >
+            Start
+          </button>
+        </div>
       </div>
     </div>
   )
