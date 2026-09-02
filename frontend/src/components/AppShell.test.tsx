@@ -10,6 +10,8 @@ const baseHandValue = {
   fps: 0,
   status: 'loading' as const,
   error: null as string | null,
+  enabled: true,
+  setEnabled: vi.fn(),
 }
 
 vi.mock('../hooks/useHandLandmarker', () => ({

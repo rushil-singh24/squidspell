@@ -29,6 +29,8 @@ export function WebcamPane({
   status,
   event,
   connection,
+  enabled,
+  onToggleCamera,
 }: {
   videoRef: RefObject<HTMLVideoElement | null>
   landmarks: number[][] | null
@@ -36,6 +38,8 @@ export function WebcamPane({
   status: HandStatus
   event: PredictionEvent | null
   connection: ConnectionStatus
+  enabled: boolean
+  onToggleCamera: () => void
 }) {
   const dotColor =
     connection === 'open'
@@ -49,7 +53,9 @@ export function WebcamPane({
       ? 'Allow camera access'
       : status === 'error'
         ? 'Camera error'
-        : 'Starting camera…'
+        : status === 'paused'
+          ? 'Camera off'
+          : 'Starting camera…'
 
   const confidencePct = Math.round((event?.static_confidence ?? 0) * 100)
 
@@ -77,6 +83,21 @@ export function WebcamPane({
       </div>
 
       <div style={{ ...readout, top: 8, left: 8 }}>{fps} fps</div>
+
+      <button
+        type="button"
+        aria-label={enabled ? 'Turn camera off' : 'Turn camera on'}
+        onClick={onToggleCamera}
+        style={{
+          ...readout,
+          top: 34,
+          left: 8,
+          cursor: 'pointer',
+          border: '1px solid var(--sq-border)',
+        }}
+      >
+        {enabled ? 'Camera on' : 'Turn on'}
+      </button>
 
       <div
         style={{

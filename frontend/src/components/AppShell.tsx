@@ -35,6 +35,8 @@ export function AppShell() {
           status={hand.status}
           event={prediction.lastEvent}
           connection={prediction.status}
+          enabled={hand.enabled}
+          onToggleCamera={() => hand.setEnabled(!hand.enabled)}
         />
       </div>
 

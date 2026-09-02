@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createRef } from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { WebcamPane } from './WebcamPane'
 import type { PredictionEvent } from '../types'
 
@@ -35,6 +35,8 @@ describe('WebcamPane', () => {
         status="denied"
         event={null}
         connection="closed"
+        enabled={true}
+        onToggleCamera={vi.fn()}
       />,
     )
     expect(screen.getByText('Allow camera access')).toBeInTheDocument()
@@ -53,6 +55,8 @@ describe('WebcamPane', () => {
           motion_active: false,
         })}
         connection="open"
+        enabled={true}
+        onToggleCamera={vi.fn()}
       />,
     )
     expect(screen.getByText('27 fps')).toBeInTheDocument()
@@ -73,8 +77,48 @@ describe('WebcamPane', () => {
           motion_active: true,
         })}
         connection="open"
+        enabled={true}
+        onToggleCamera={vi.fn()}
       />,
     )
     expect(screen.getByText(/MOTION/)).toBeInTheDocument()
+  })
+
+  it('shows the paused hint and a re-enable button clicking through to onToggleCamera', () => {
+    const onToggleCamera = vi.fn()
+    render(
+      <WebcamPane
+        videoRef={createRef<HTMLVideoElement>()}
+        landmarks={null}
+        fps={0}
+        status="paused"
+        event={null}
+        connection="closed"
+        enabled={false}
+        onToggleCamera={onToggleCamera}
+      />,
+    )
+    expect(screen.getByText('Camera off')).toBeInTheDocument()
+    const btn = screen.getByRole('button', { name: 'Turn camera on' })
+    fireEvent.click(btn)
+    expect(onToggleCamera).toHaveBeenCalledTimes(1)
+  })
+
+  it('labels the toggle button "Turn camera off" while enabled', () => {
+    render(
+      <WebcamPane
+        videoRef={createRef<HTMLVideoElement>()}
+        landmarks={null}
+        fps={0}
+        status="ready"
+        event={null}
+        connection="open"
+        enabled={true}
+        onToggleCamera={vi.fn()}
+      />,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Turn camera off' }),
+    ).toBeInTheDocument()
   })
 })

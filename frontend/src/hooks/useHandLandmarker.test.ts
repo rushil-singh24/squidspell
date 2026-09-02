@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook, waitFor, act } from '@testing-library/react'
 import { HandLandmarker } from '@mediapipe/tasks-vision'
 
 vi.mock('@mediapipe/tasks-vision', () => ({
@@ -67,6 +67,31 @@ describe('useHandLandmarker', () => {
     const arg = onFrame.mock.calls[0][0] as number[][]
     expect(arg).toHaveLength(21)
     expect(arg[0]).toHaveLength(3)
+  })
+
+  it('pauses on setEnabled(false) and re-acquires the camera on setEnabled(true)', async () => {
+    getUserMedia.mockResolvedValue({
+      getTracks: () => [{ stop: vi.fn() }],
+    } as unknown as MediaStream)
+
+    const onFrame = vi.fn()
+    const { result } = renderHook(() => useHandLandmarker(onFrame))
+    result.current.videoRef.current = document.createElement('video')
+
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    await waitFor(() => expect(result.current.landmarks).toHaveLength(21))
+    const callsBeforePause = getUserMedia.mock.calls.length
+
+    act(() => result.current.setEnabled(false))
+
+    await waitFor(() => expect(result.current.status).toBe('paused'))
+    expect(result.current.landmarks).toBeNull()
+    expect(onFrame.mock.calls.at(-1)![0]).toBeNull()
+
+    act(() => result.current.setEnabled(true))
+
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(getUserMedia.mock.calls.length).toBeGreaterThan(callsBeforePause)
   })
 
   it('maps a NotAllowedError from getUserMedia to denied', async () => {
