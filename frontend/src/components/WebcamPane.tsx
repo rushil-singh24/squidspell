@@ -22,6 +22,27 @@ const readout: CSSProperties = {
   lineHeight: 1.4,
 }
 
+function CameraIcon({ slashed, size }: { slashed: boolean; size: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ display: 'block' }}
+    >
+      <path d="M23 7l-7 5 7 5V7z" />
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+      {slashed && <line x1="2" y1="2" x2="22" y2="22" />}
+    </svg>
+  )
+}
+
 export function WebcamPane({
   videoRef,
   landmarks,
@@ -82,6 +103,25 @@ export function WebcamPane({
         </div>
       </div>
 
+      {!enabled && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            background: 'var(--sq-bg-deep)',
+            color: 'var(--sq-fg-muted)',
+          }}
+        >
+          <CameraIcon slashed size={52} />
+          <span style={{ fontSize: 14 }}>Camera off</span>
+        </div>
+      )}
+
       <div style={{ ...readout, top: 8, left: 8 }}>{fps} fps</div>
 
       <button
@@ -92,11 +132,16 @@ export function WebcamPane({
           ...readout,
           top: 34,
           left: 8,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 5,
           cursor: 'pointer',
           border: '1px solid var(--sq-border)',
+          color: enabled ? 'var(--sq-fg-muted)' : 'var(--sq-error)',
         }}
       >
-        {enabled ? 'Camera on' : 'Turn on'}
+        <CameraIcon slashed={!enabled} size={15} />
       </button>
 
       <div
@@ -113,6 +158,7 @@ export function WebcamPane({
         <span>{connection}</span>
       </div>
 
+      {status !== 'paused' && (
       <div
         style={{
           ...readout,
@@ -164,6 +210,7 @@ export function WebcamPane({
           </>
         )}
       </div>
+      )}
     </div>
   )
 }
