@@ -73,6 +73,26 @@ describe('TrainPane', () => {
     expect(onAction).toHaveBeenCalledWith('delete')
   })
 
+  it('keyboard Space / Backspace fire the transcript edit actions', () => {
+    const onAction = vi.fn()
+    render(<TrainPane {...props({ transcript: 'HI', onAction })} />)
+
+    fireEvent.keyDown(document.body, { key: ' ' })
+    expect(onAction).toHaveBeenCalledWith('space')
+
+    fireEvent.keyDown(document.body, { key: 'Backspace' })
+    expect(onAction).toHaveBeenCalledWith('delete')
+  })
+
+  it('does not fire transcript edits from the keyboard while a button has focus', () => {
+    const onAction = vi.fn()
+    render(<TrainPane {...props({ transcript: 'HI', onAction })} />)
+    const btn = screen.getByRole('button', { name: /download/i })
+    btn.focus()
+    fireEvent.keyDown(btn, { key: ' ' })
+    expect(onAction).not.toHaveBeenCalledWith('space')
+  })
+
   it('fires clear only after a full hold', () => {
     const onAction = vi.fn()
     render(<TrainPane {...props({ transcript: 'HI', onAction })} />)

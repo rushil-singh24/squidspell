@@ -136,6 +136,29 @@ export const TrainPane = memo(function TrainPane({
     if (el) el.scrollTop = el.scrollHeight
   }, [transcript])
 
+  // Keyboard Space / Backspace mirror the on-screen edit controls. Letter keys
+  // are deliberately NOT wired — the transcript only grows from recognised
+  // signs. Ignored while a button/input holds focus so it can't double-fire.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const el = e.target as HTMLElement | null
+      if (
+        el &&
+        el.closest('button, input, textarea, select, [contenteditable="true"]')
+      )
+        return
+      if (e.key === ' ') {
+        e.preventDefault()
+        onAction('space')
+      } else if (e.key === 'Backspace') {
+        e.preventDefault()
+        onAction('delete')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onAction])
+
   function onDownload() {
     const url = URL.createObjectURL(new Blob([transcript], { type: 'text/plain' }))
     const a = document.createElement('a')
