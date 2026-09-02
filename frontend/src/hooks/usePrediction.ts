@@ -59,6 +59,10 @@ export function usePrediction(url: string = WS_URL) {
     (a: TranscriptAction) => clientRef.current?.sendAction(a),
     [],
   )
+  const loadTranscript = useCallback(
+    (text: string) => clientRef.current?.sendLoad(text),
+    [],
+  )
   const startRace = useCallback(
     (duration: number) => clientRef.current?.sendRace('start', duration),
     [],
@@ -80,6 +84,7 @@ export function usePrediction(url: string = WS_URL) {
     sendLandmarks,
     setMode,
     sendAction,
+    loadTranscript,
     startRace,
     stopRace,
     onCommit,

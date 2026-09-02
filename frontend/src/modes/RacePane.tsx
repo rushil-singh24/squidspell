@@ -305,7 +305,9 @@ export function RacePane({
             </button>
           ))}
         </div>
-        {best !== undefined && <p style={bestLine}>Best: {best} SPM</p>}
+        {userId != null && best !== undefined && (
+          <p style={bestLine}>Best: {best} SPM</p>
+        )}
         <button
           type="button"
           style={primaryButton}

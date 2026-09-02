@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ComponentProps } from 'react'
 import { TrainPane } from './TrainPane'
+import type { TrainEntry } from '../lib/trainHistory'
 
 let rafCbs: FrameRequestCallback[] = []
 let nowMs = 0
@@ -15,13 +17,11 @@ beforeEach(() => {
   })
   vi.stubGlobal('cancelAnimationFrame', () => {})
   vi.spyOn(performance, 'now').mockImplementation(() => nowMs)
-  localStorage.clear()
 })
 
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
-  localStorage.clear()
 })
 
 function flush(ms: number) {
@@ -31,9 +31,22 @@ function flush(ms: number) {
   cbs.forEach((cb) => cb(nowMs))
 }
 
+function props(over: Partial<ComponentProps<typeof TrainPane>> = {}) {
+  return {
+    transcript: '',
+    onAction: vi.fn(),
+    userId: 'user-1' as string | null,
+    entries: [] as TrainEntry[],
+    onSave: vi.fn(),
+    onDelete: vi.fn(),
+    onReopen: vi.fn(),
+    ...over,
+  }
+}
+
 describe('TrainPane', () => {
   it('shows the empty state with a disabled control set when transcript is blank', () => {
-    render(<TrainPane transcript="" onAction={vi.fn()} userId={null} />)
+    render(<TrainPane {...props({ transcript: '' })} />)
 
     expect(
       screen.getByText('Sign a letter to start your transcript.'),
@@ -49,7 +62,7 @@ describe('TrainPane', () => {
   it('renders the transcript text and fires Space / Delete instantly', async () => {
     const user = userEvent.setup()
     const onAction = vi.fn()
-    render(<TrainPane transcript="HELLO" onAction={onAction} userId={null} />)
+    render(<TrainPane {...props({ transcript: 'HELLO', onAction })} />)
 
     expect(screen.getByTestId('train-transcript')).toHaveTextContent('HELLO')
 
@@ -62,7 +75,7 @@ describe('TrainPane', () => {
 
   it('fires clear only after a full hold', () => {
     const onAction = vi.fn()
-    render(<TrainPane transcript="HI" onAction={onAction} userId={null} />)
+    render(<TrainPane {...props({ transcript: 'HI', onAction })} />)
 
     fireEvent.pointerDown(screen.getByRole('button', { name: /clear/i }))
     flush(1100)
@@ -71,27 +84,49 @@ describe('TrainPane', () => {
     expect(onAction).toHaveBeenCalledTimes(1)
   })
 
-  it('saves a transcript to local history and removes it again', async () => {
+  it('Save calls onSave with the current transcript when signed in', async () => {
     const user = userEvent.setup()
-    render(<TrainPane transcript="HI" onAction={vi.fn()} userId={null} />)
+    const onSave = vi.fn()
+    render(<TrainPane {...props({ transcript: 'HI', onSave, userId: 'user-1' })} />)
 
-    await user.click(screen.getByRole('button', { name: /^save$/i }))
+    const save = screen.getByRole('button', { name: /^save$/i })
+    expect(save).toBeEnabled()
+    await user.click(save)
+    expect(onSave).toHaveBeenCalledWith('HI')
+  })
 
-    expect(await screen.findByText(/HI/)).toBeInTheDocument()
-    await waitFor(() => {
-      const stored = JSON.parse(
-        localStorage.getItem('squidspell-train-history') ?? '[]',
-      )
-      expect(Array.isArray(stored)).toBe(true)
-      expect(stored).toHaveLength(1)
-    })
+  it('Save is disabled with a sign-in hint when logged out', () => {
+    render(<TrainPane {...props({ transcript: 'HI', userId: null })} />)
+    const save = screen.getByRole('button', { name: /^save$/i })
+    expect(save).toBeDisabled()
+    expect(save).toHaveAttribute('title', 'Sign in to save')
+  })
 
-    await user.click(screen.getByRole('button', { name: /delete saved transcript/i }))
-    await waitFor(() => expect(screen.queryByText(/^HI$/)).toBeNull())
-    const after = JSON.parse(
-      localStorage.getItem('squidspell-train-history') ?? '[]',
+  it('drives the saved list off entries: reopen + delete callbacks', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn()
+    const onReopen = vi.fn()
+    const entries: TrainEntry[] = [
+      { id: 'e1', text: 'HELLO WORLD', savedAt: Date.now() },
+    ]
+    render(
+      <TrainPane
+        {...props({ transcript: 'HI', entries, onDelete, onReopen })}
+      />,
     )
-    expect(after).toHaveLength(0)
+
+    await user.click(screen.getByRole('button', { name: 'HELLO WORLD' }))
+    expect(onReopen).toHaveBeenCalledWith('HELLO WORLD')
+
+    await user.click(
+      screen.getByRole('button', { name: /delete saved transcript/i }),
+    )
+    expect(onDelete).toHaveBeenCalledWith('e1')
+  })
+
+  it('renders no saved list when entries is empty', () => {
+    render(<TrainPane {...props({ transcript: 'HI', entries: [] })} />)
+    expect(screen.queryByRole('list')).toBeNull()
   })
 
   it('downloads the transcript as a text blob without leaking the anchor or revoking early', async () => {
@@ -105,41 +140,15 @@ describe('TrainPane', () => {
     } as unknown as typeof URL)
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(click)
 
-    render(<TrainPane transcript="HI" onAction={vi.fn()} userId={null} />)
-    // fireEvent (sync) so we can observe the state right after the handler runs
+    render(<TrainPane {...props({ transcript: 'HI' })} />)
     fireEvent.click(screen.getByRole('button', { name: /download/i }))
 
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(Blob)
     expect(click).toHaveBeenCalled()
-    // anchor is cleaned out of the document
     expect(document.querySelector('a[download]')).toBeNull()
-    // revoke is deferred, not synchronous (Firefox/Safari would cancel the download)
     expect(revokeObjectURL).not.toHaveBeenCalled()
     await new Promise((r) => setTimeout(r, 0))
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:x')
-  })
-
-  it('degrades to an empty history when stored JSON has the wrong shape', async () => {
-    const user = userEvent.setup()
-    for (const bad of ['{"a":1}', '[1,2,3]']) {
-      localStorage.setItem('squidspell-train-history', bad)
-      const { unmount } = render(
-        <TrainPane transcript="HI" onAction={vi.fn()} userId={null} />,
-      )
-      // renders without throwing; no history list present
-      expect(screen.queryByRole('list')).toBeNull()
-      await user.click(screen.getByRole('button', { name: /^save$/i }))
-      await waitFor(() => {
-        const stored = JSON.parse(
-          localStorage.getItem('squidspell-train-history') ?? 'null',
-        )
-        expect(Array.isArray(stored)).toBe(true)
-        expect(stored).toHaveLength(1)
-        expect(stored[0]).toMatchObject({ text: 'HI' })
-      })
-      unmount()
-      localStorage.clear()
-    }
   })
 })

@@ -28,12 +28,22 @@ const mockPrediction = {
   race: null,
   setMode: vi.fn(),
   sendAction: vi.fn(),
+  loadTranscript: vi.fn(),
   startRace: vi.fn(),
   stopRace: vi.fn(),
 }
 
 vi.mock('../hooks/usePrediction', () => ({
   usePrediction: () => mockPrediction,
+}))
+
+vi.mock('../hooks/useTrainHistory', () => ({
+  useTrainHistory: () => ({
+    entries: [],
+    save: vi.fn(),
+    remove: vi.fn(),
+    reload: vi.fn(),
+  }),
 }))
 
 vi.mock('./WebcamPane', () => ({

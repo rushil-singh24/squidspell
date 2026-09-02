@@ -1,53 +1,14 @@
 import { supabase, isSupabaseConfigured } from './supabase'
 
 /**
- * One saved Train-mode transcript. Same shape whether it came from
- * `localStorage` (anonymous) or the Supabase `translations` table (signed in).
+ * One saved Train-mode transcript, read from the Supabase `translations` table.
+ * Persistence is account-only — logged out means nothing is saved or shown.
  */
 export type TrainEntry = { id: string; text: string; savedAt: number }
 
-const HISTORY_KEY = 'squidspell-train-history'
-
 type TranslationRow = { id: string; sentence: string; created_at: string }
 
-/** Anonymous read: the original `TrainPane.loadHistory()` logic, verbatim. */
-function loadLocal(): TrainEntry[] {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY)
-    const parsed: unknown = raw ? JSON.parse(raw) : []
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (e): e is TrainEntry =>
-        !!e &&
-        typeof e === 'object' &&
-        typeof (e as TrainEntry).id === 'string' &&
-        typeof (e as TrainEntry).text === 'string' &&
-        typeof (e as TrainEntry).savedAt === 'number',
-    )
-  } catch {
-    return []
-  }
-}
-
-function writeLocal(next: TrainEntry[]): void {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
-  } catch {
-    /* ignore */
-  }
-}
-
-function newEntry(text: string): TrainEntry {
-  return {
-    id:
-      crypto.randomUUID?.() ??
-      `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    text,
-    savedAt: Date.now(),
-  }
-}
-
-/** True when we should use the `localStorage` store instead of Supabase. */
+/** True when there is no signed-in account to persist against. */
 function anon(userId: string | null): boolean {
   return userId === null || !isSupabaseConfigured || !supabase
 }
@@ -55,7 +16,7 @@ function anon(userId: string | null): boolean {
 export async function loadTrainHistory(
   userId: string | null,
 ): Promise<TrainEntry[] | null> {
-  if (anon(userId)) return loadLocal()
+  if (anon(userId)) return []
 
   const { data, error } = await supabase!
     .from('translations')
@@ -64,8 +25,7 @@ export async function loadTrainHistory(
     .order('created_at', { ascending: false })
 
   if (error) {
-    // Signed-in failure must NOT touch the anon store — return null so the
-    // caller keeps whatever it already has.
+    // Return null so the caller keeps whatever it already has.
     console.warn('[trainHistory] load failed; keeping current state', error)
     return null
   }
@@ -81,18 +41,14 @@ export async function saveTrainSentence(
   userId: string | null,
   text: string,
 ): Promise<TrainEntry[] | null> {
-  if (anon(userId)) {
-    const next = [newEntry(text), ...loadLocal()]
-    writeLocal(next)
-    return next
-  }
+  // No account → nothing to do; the UI should not have offered Save.
+  if (anon(userId)) return null
 
   const { error } = await supabase!
     .from('translations')
     .insert({ user_id: userId, sentence: text })
 
   if (error) {
-    // Non-destructive: do not write the anon store from the signed-in path.
     console.warn('[trainHistory] save failed; keeping current state', error)
     return null
   }
@@ -104,11 +60,7 @@ export async function deleteTrainSentence(
   userId: string | null,
   id: string,
 ): Promise<TrainEntry[] | null> {
-  if (anon(userId)) {
-    const next = loadLocal().filter((e) => e.id !== id)
-    writeLocal(next)
-    return next
-  }
+  if (anon(userId)) return null
 
   // Scope the delete to the signer explicitly, matching the sibling selects —
   // defense in depth on top of RLS (`auth.uid() = user_id`), not RLS-only.
@@ -119,7 +71,6 @@ export async function deleteTrainSentence(
     .eq('user_id', userId)
 
   if (error) {
-    // Non-destructive: leave the anon store alone; caller keeps current state.
     console.warn('[trainHistory] delete failed; keeping current state', error)
     return null
   }

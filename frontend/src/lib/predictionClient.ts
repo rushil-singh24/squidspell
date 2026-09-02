@@ -92,6 +92,10 @@ export class PredictionClient {
     this.rawSend({ action })
   }
 
+  sendLoad(text: string): void {
+    this.rawSend({ action: 'load', text })
+  }
+
   sendRace(action: 'start' | 'stop', duration?: number): void {
     this.rawSend({ race: action, ...(duration !== undefined ? { duration } : {}) })
   }

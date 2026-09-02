@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useHandLandmarker } from '../hooks/useHandLandmarker'
 import { usePrediction } from '../hooks/usePrediction'
 import { useAuth } from '../hooks/useAuth'
+import { useTrainHistory } from '../hooks/useTrainHistory'
 import { WebcamPane } from './WebcamPane'
 import { ModeToggle } from './ModeToggle'
 import { ThemeToggle } from './ThemeToggle'
@@ -15,6 +16,7 @@ export function AppShell() {
   const [mode, setMode] = useState<Mode>('train')
   const prediction = usePrediction()
   const auth = useAuth()
+  const trainHistory = useTrainHistory(auth.user?.id ?? null)
   const hand = useHandLandmarker(prediction.sendLandmarks)
   const [dismissedError, setDismissedError] = useState<string | null>(null)
 
@@ -76,6 +78,13 @@ export function AppShell() {
                 transcript={prediction.transcript}
                 onAction={prediction.sendAction}
                 userId={auth.user?.id ?? null}
+                entries={trainHistory.entries}
+                onSave={(text) => {
+                  trainHistory.save(text)
+                  prediction.sendAction('clear')
+                }}
+                onDelete={trainHistory.remove}
+                onReopen={(text) => prediction.loadTranscript(text)}
               />
             ) : (
               <RacePane

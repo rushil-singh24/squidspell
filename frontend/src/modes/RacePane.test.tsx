@@ -3,11 +3,19 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RacePane } from './RacePane'
 import type { RaceSnapshot } from '../types'
+import { loadBests, recordRaceResult } from '../lib/raceStore'
+
+vi.mock('../lib/raceStore', () => ({
+  loadBests: vi.fn().mockResolvedValue({}),
+  recordRaceResult: vi.fn().mockResolvedValue(null),
+}))
 
 const noop = () => {}
 
 beforeEach(() => {
-  localStorage.clear()
+  vi.clearAllMocks()
+  vi.mocked(loadBests).mockResolvedValue({})
+  vi.mocked(recordRaceResult).mockResolvedValue(null)
 })
 
 const running: RaceSnapshot = {
@@ -85,8 +93,14 @@ describe('RacePane', () => {
   })
 
   it('finished: shows the results card and records a personal best', async () => {
+    vi.mocked(recordRaceResult).mockResolvedValue({ 30: 41.2 })
     render(
-      <RacePane race={finished} userId={null} startRace={noop} stopRace={noop} />,
+      <RacePane
+        race={finished}
+        userId="user-1"
+        startRace={noop}
+        stopRace={noop}
+      />,
     )
     expect(screen.getByText('41.2')).toBeInTheDocument()
     expect(screen.getByText('90%')).toBeInTheDocument()
@@ -94,11 +108,12 @@ describe('RacePane', () => {
     const tryAgain = screen.getByRole('button', { name: /try again/i })
     expect(tryAgain).toBeEnabled()
     await waitFor(() =>
-      expect(
-        JSON.parse(
-          localStorage.getItem('squidspell-race-bests') as string,
-        )['30'],
-      ).toBe(41.2),
+      expect(recordRaceResult).toHaveBeenCalledWith('user-1', {
+        duration_s: 30,
+        spm: 41.2,
+        accuracy: 0.9,
+        consistency: 78,
+      }),
     )
   })
 
@@ -113,14 +128,21 @@ describe('RacePane', () => {
     expect(screen.getByText('—')).toBeInTheDocument()
   })
 
-  it('tolerates a corrupt bests payload and shows no Best line', () => {
-    localStorage.setItem('squidspell-race-bests', '[1,2]')
-    expect(() =>
-      render(
-        <RacePane race={null} userId={null} startRace={noop} stopRace={noop} />,
-      ),
-    ).not.toThrow()
+  it('shows no Best line when logged out', async () => {
+    render(
+      <RacePane race={null} userId={null} startRace={noop} stopRace={noop} />,
+    )
     expect(screen.queryByText(/Best:/)).toBeNull()
+    // logged out never hits the store
+    await waitFor(() => expect(loadBests).toHaveBeenCalledWith(null))
+  })
+
+  it('shows the Best line from the store when signed in', async () => {
+    vi.mocked(loadBests).mockResolvedValue({ 30: 55 })
+    render(
+      <RacePane race={null} userId="user-1" startRace={noop} stopRace={noop} />,
+    )
+    expect(await screen.findByText('Best: 55 SPM')).toBeInTheDocument()
   })
 
   it('shows a dropped-connection banner when a running race vanishes without a local Stop', () => {

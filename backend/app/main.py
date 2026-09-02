@@ -132,6 +132,17 @@ def create_app(service: PredictionService | None = None) -> FastAPI:
                     continue
                 if "action" in msg:
                     action = msg["action"]
+                    if action == "load":
+                        text = msg.get("text")
+                        if not isinstance(text, str):
+                            await websocket.send_json({
+                                "error": "load action requires a string 'text'",
+                                "timestamp": int(time.time() * 1000),
+                            })
+                            continue
+                        if transcript is not None:
+                            transcript.load(text)
+                        continue
                     if action not in VALID_ACTIONS:
                         await websocket.send_json({
                             "error": "unknown action",

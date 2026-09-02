@@ -5,8 +5,6 @@ import {
   deleteTrainSentence,
 } from './trainHistory'
 
-const HISTORY_KEY = 'squidspell-train-history'
-
 const mocks = vi.hoisted(() => ({
   configured: { value: false },
   from: vi.fn(),
@@ -24,49 +22,22 @@ vi.mock('./supabase', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.configured.value = false
-  localStorage.clear()
 })
 
-describe('trainHistory — anonymous (localStorage) path', () => {
-  it('round-trips save → load → delete through localStorage', async () => {
-    const afterSave = await saveTrainSentence(null, 'HELLO')
-    if (!afterSave) throw new Error('anon path must not return null')
-    expect(afterSave).toHaveLength(1)
-    expect(afterSave[0]).toMatchObject({ text: 'HELLO' })
-    expect(typeof afterSave[0].id).toBe('string')
-    expect(typeof afterSave[0].savedAt).toBe('number')
-
-    const stored = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]')
-    expect(stored).toHaveLength(1)
-    expect(stored[0].text).toBe('HELLO')
-
-    const loaded = await loadTrainHistory(null)
-    expect(loaded).toEqual(afterSave)
-
-    const afterDelete = await deleteTrainSentence(null, afterSave[0].id)
-    expect(afterDelete).toHaveLength(0)
-    expect(afterDelete).not.toBeNull()
-    expect(JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]')).toHaveLength(0)
+describe('trainHistory — account-only guards', () => {
+  it('loadTrainHistory returns [] (never null) when logged out', async () => {
+    expect(await loadTrainHistory(null)).toEqual([])
   })
 
-  it('prepends new entries (newest first)', async () => {
-    await saveTrainSentence(null, 'FIRST')
-    const list = await saveTrainSentence(null, 'SECOND')
-    expect(list?.map((e) => e.text)).toEqual(['SECOND', 'FIRST'])
-  })
-
-  it('degrades to an empty list when stored JSON has the wrong shape', async () => {
-    for (const bad of ['{"a":1}', '[1,2,3]', 'not json']) {
-      localStorage.setItem(HISTORY_KEY, bad)
-      expect(await loadTrainHistory(null)).toEqual([])
-    }
-  })
-
-  it('uses the local path when a userId is set but Supabase is not configured', async () => {
+  it('returns [] when a userId is set but Supabase is not configured', async () => {
     mocks.configured.value = false
-    const list = await saveTrainSentence('user-1', 'ANON-FALLBACK')
-    expect(list).toHaveLength(1)
-    expect(list).not.toBeNull()
+    expect(await loadTrainHistory('user-1')).toEqual([])
+    expect(mocks.from).not.toHaveBeenCalled()
+  })
+
+  it('save / delete are no-ops (return null) with no account', async () => {
+    expect(await saveTrainSentence(null, 'HELLO')).toBeNull()
+    expect(await deleteTrainSentence(null, 'x')).toBeNull()
     expect(mocks.from).not.toHaveBeenCalled()
   })
 })
@@ -130,10 +101,8 @@ describe('trainHistory — signed-in (Supabase) path', () => {
     expect(list?.map((e) => e.id)).toEqual(['r2', 'r1'])
   })
 
-  it('returns null and leaves the local store untouched on a Supabase load error', async () => {
+  it('returns null on a Supabase load error', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const seed = JSON.stringify([{ id: 'local-1', text: 'LOCAL', savedAt: 123 }])
-    localStorage.setItem(HISTORY_KEY, seed)
     const { select } = stubSelect({ data: null, error: { message: 'boom' } })
     mocks.from.mockReturnValue({ select })
 
@@ -141,11 +110,10 @@ describe('trainHistory — signed-in (Supabase) path', () => {
 
     expect(warn).toHaveBeenCalled()
     expect(list).toBeNull()
-    expect(localStorage.getItem(HISTORY_KEY)).toBe(seed)
     warn.mockRestore()
   })
 
-  it('returns null and does not write the local store when insert errors', async () => {
+  it('returns null when insert errors', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const insert = vi.fn().mockResolvedValue({ error: { message: 'nope' } })
     mocks.from.mockReturnValue({ insert })
@@ -154,17 +122,11 @@ describe('trainHistory — signed-in (Supabase) path', () => {
 
     expect(warn).toHaveBeenCalled()
     expect(list).toBeNull()
-    expect(localStorage.getItem(HISTORY_KEY)).toBeNull()
     warn.mockRestore()
   })
 
-  it('returns null and does not mutate the local store when delete errors', async () => {
+  it('returns null when delete errors', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const seed = JSON.stringify([
-      { id: 'local-1', text: 'ONE', savedAt: 1 },
-      { id: 'local-2', text: 'TWO', savedAt: 2 },
-    ])
-    localStorage.setItem(HISTORY_KEY, seed)
     const eqUser = vi.fn().mockResolvedValue({ error: { message: 'boom' } })
     const eqId = vi.fn(() => ({ eq: eqUser }))
     const del = vi.fn(() => ({ eq: eqId }))
@@ -174,7 +136,6 @@ describe('trainHistory — signed-in (Supabase) path', () => {
 
     expect(warn).toHaveBeenCalled()
     expect(list).toBeNull()
-    expect(localStorage.getItem(HISTORY_KEY)).toBe(seed)
     warn.mockRestore()
   })
 })

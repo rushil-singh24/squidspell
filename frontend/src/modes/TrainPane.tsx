@@ -1,15 +1,10 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { CommitPop } from '../motion/CommitPop'
 import { SquidMascot } from '../components/SquidMascot'
 import { HoldButton } from '../components/HoldButton'
 import type { TranscriptAction } from '../types'
 import type { TrainEntry } from '../lib/trainHistory'
-import {
-  loadTrainHistory,
-  saveTrainSentence,
-  deleteTrainSentence,
-} from '../lib/trainHistory'
 
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts
@@ -93,40 +88,28 @@ export const TrainPane = memo(function TrainPane({
   transcript,
   onAction,
   userId,
+  entries,
+  onSave,
+  onDelete,
+  onReopen,
 }: {
   transcript: string
   onAction: (a: TranscriptAction) => void
   userId: string | null
+  entries: TrainEntry[]
+  onSave: (text: string) => void
+  onDelete: (id: string) => void
+  onReopen: (text: string) => void
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const [history, setHistory] = useState<TrainEntry[]>([])
-  const userIdRef = useRef(userId)
-  userIdRef.current = userId
 
   const empty = transcript === ''
+  const canSave = entries !== undefined && userId != null
 
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [transcript])
-
-  useEffect(() => {
-    let active = true
-    loadTrainHistory(userId).then((list) => {
-      // null = a signed-in Supabase read failed; keep current state.
-      if (active && list) setHistory(list)
-    })
-    return () => {
-      active = false
-    }
-  }, [userId])
-
-  function onSave() {
-    const uid = userId
-    void saveTrainSentence(uid, transcript).then((list) => {
-      if (list && uid === userIdRef.current) setHistory(list)
-    })
-  }
 
   function onDownload() {
     const url = URL.createObjectURL(new Blob([transcript], { type: 'text/plain' }))
@@ -182,7 +165,13 @@ export const TrainPane = memo(function TrainPane({
         >
           Clear (hold)
         </HoldButton>
-        <button type="button" style={plainButton} disabled={empty} onClick={onSave}>
+        <button
+          type="button"
+          style={plainButton}
+          disabled={empty || !canSave}
+          title={userId == null ? 'Sign in to save' : undefined}
+          onClick={() => onSave(transcript)}
+        >
           Save
         </button>
         <button
@@ -195,32 +184,34 @@ export const TrainPane = memo(function TrainPane({
         </button>
       </div>
 
-      {history.length > 0 && (
+      {entries.length > 0 && (
         <ul style={historyList}>
-          {history.map((entry) => (
+          {entries.map((entry) => (
             <li key={entry.id} style={historyItem}>
               <span style={{ flexShrink: 0 }}>{relativeTime(entry.savedAt)}</span>
-              <span
+              <button
+                type="button"
+                onClick={() => onReopen(entry.text)}
                 style={{
                   flex: 1,
                   minWidth: 0,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  textAlign: 'left',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  font: 'inherit',
                   color: 'var(--sq-fg)',
                 }}
               >
                 {entry.text.slice(0, 40)}
-              </span>
+              </button>
               <button
                 type="button"
                 aria-label={`Delete saved transcript from ${relativeTime(entry.savedAt)}`}
-                onClick={() => {
-                  const uid = userId
-                  void deleteTrainSentence(uid, entry.id).then((list) => {
-                    if (list && uid === userIdRef.current) setHistory(list)
-                  })
-                }}
+                onClick={() => onDelete(entry.id)}
                 style={{
                   border: 'none',
                   background: 'transparent',

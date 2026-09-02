@@ -111,6 +111,19 @@ describe('PredictionClient', () => {
     })
   })
 
+  it('sendLoad sends {action:"load",text} when open', () => {
+    const c = new PredictionClient('ws://x', { WebSocketCtor: FakeWS as never })
+    c.connect()
+    c.sendLoad('hi') // not open -> dropped
+    expect(FakeWS.last!.sent).toHaveLength(0)
+    FakeWS.last!._open()
+    c.sendLoad('hi')
+    expect(FakeWS.last!.sent.map((s) => JSON.parse(s))).toContainEqual({
+      action: 'load',
+      text: 'hi',
+    })
+  })
+
   it('sendRace sends {race,duration} on start and {race} on stop, only when open', () => {
     const c = new PredictionClient('ws://x', { WebSocketCtor: FakeWS as never })
     c.connect()

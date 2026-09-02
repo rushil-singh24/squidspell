@@ -58,6 +58,13 @@ class TranscriptBuilder:
         self._text = self._text[:MAX_TRANSCRIPT_CHARS]
         return self._text != before
 
+    def load(self, text: str) -> None:
+        """Replace the transcript with a previously-saved string so it can be
+        reopened for editing. Mirrors commit_letter's uppercase + length cap.
+        Resets _last so an identical next committed letter still appends."""
+        self._text = text.upper()[:MAX_TRANSCRIPT_CHARS]
+        self._last = None
+
     def reset(self) -> None:
         self._text = ""
         self._last = None

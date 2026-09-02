@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { loadBests, recordRaceResult } from './raceStore'
 
-const BESTS_KEY = 'squidspell-race-bests'
-
 const mocks = vi.hoisted(() => ({
   configured: { value: false },
   from: vi.fn(),
@@ -20,80 +18,27 @@ vi.mock('./supabase', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.configured.value = false
-  localStorage.clear()
 })
 
-describe('raceStore — anonymous (localStorage) path', () => {
-  it('records a personal best and round-trips it through localStorage', async () => {
-    const afterFirst = await recordRaceResult(null, {
-      duration_s: 30,
-      spm: 40,
-      accuracy: 0.9,
-      consistency: 70,
-    })
-    expect(afterFirst).toEqual({ 30: 40 })
-    expect(JSON.parse(localStorage.getItem(BESTS_KEY) as string)).toEqual({
-      30: 40,
-    })
-
-    expect(await loadBests(null)).toEqual({ 30: 40 })
+describe('raceStore — account-only guards', () => {
+  it('loadBests returns {} (never null) when logged out', async () => {
+    expect(await loadBests(null)).toEqual({})
   })
 
-  it('only raises a best when the new spm beats the stored one', async () => {
-    await recordRaceResult(null, {
-      duration_s: 30,
-      spm: 40,
-      accuracy: null,
-      consistency: null,
-    })
-    const lower = await recordRaceResult(null, {
-      duration_s: 30,
-      spm: 25,
-      accuracy: null,
-      consistency: null,
-    })
-    expect(lower).toEqual({ 30: 40 })
-    const higher = await recordRaceResult(null, {
-      duration_s: 30,
-      spm: 55,
-      accuracy: null,
-      consistency: null,
-    })
-    expect(higher).toEqual({ 30: 55 })
-  })
-
-  it('keeps per-duration bests independent', async () => {
-    await recordRaceResult(null, {
-      duration_s: 15,
-      spm: 20,
-      accuracy: null,
-      consistency: null,
-    })
-    const both = await recordRaceResult(null, {
-      duration_s: 60,
-      spm: 80,
-      accuracy: null,
-      consistency: null,
-    })
-    expect(both).toEqual({ 15: 20, 60: 80 })
-  })
-
-  it('degrades to an empty map when stored JSON is malformed', async () => {
-    for (const bad of ['{"30":"fast"}', '[1,2,3]', 'not json']) {
-      localStorage.setItem(BESTS_KEY, bad)
-      expect(await loadBests(null)).toEqual({})
-    }
-  })
-
-  it('uses the local path when a userId is set but Supabase is not configured', async () => {
+  it('returns {} when a userId is set but Supabase is not configured', async () => {
     mocks.configured.value = false
-    const out = await recordRaceResult('user-1', {
+    expect(await loadBests('user-1')).toEqual({})
+    expect(mocks.from).not.toHaveBeenCalled()
+  })
+
+  it('recordRaceResult is a no-op (returns null) with no account', async () => {
+    const out = await recordRaceResult(null, {
       duration_s: 30,
       spm: 33,
       accuracy: null,
       consistency: null,
     })
-    expect(out).toEqual({ 30: 33 })
+    expect(out).toBeNull()
     expect(mocks.from).not.toHaveBeenCalled()
   })
 })
@@ -152,10 +97,8 @@ describe('raceStore — signed-in (Supabase) path', () => {
     expect(bests).toEqual({ 30: 44 })
   })
 
-  it('loadBests returns null and leaves the local map untouched on a Supabase error', async () => {
+  it('loadBests returns null on a Supabase error', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const seed = JSON.stringify({ 30: 99 })
-    localStorage.setItem(BESTS_KEY, seed)
     const { select } = stubSelect({ data: null, error: { message: 'boom' } })
     mocks.from.mockReturnValue({ select })
 
@@ -163,11 +106,10 @@ describe('raceStore — signed-in (Supabase) path', () => {
 
     expect(warn).toHaveBeenCalled()
     expect(bests).toBeNull()
-    expect(localStorage.getItem(BESTS_KEY)).toBe(seed)
     warn.mockRestore()
   })
 
-  it('recordRaceResult returns null and does not write the local map when the insert errors', async () => {
+  it('recordRaceResult returns null when the insert errors', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const insert = vi.fn().mockResolvedValue({ error: { message: 'nope' } })
     mocks.from.mockReturnValue({ insert })
@@ -181,7 +123,6 @@ describe('raceStore — signed-in (Supabase) path', () => {
 
     expect(warn).toHaveBeenCalled()
     expect(bests).toBeNull()
-    expect(localStorage.getItem(BESTS_KEY)).toBeNull()
     warn.mockRestore()
   })
 })

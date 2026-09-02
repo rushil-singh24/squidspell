@@ -62,6 +62,25 @@ def test_apply_rejects_unknown_action():
         TranscriptBuilder().apply("backspace")
 
 
+def test_load_uppercases_and_truncates():
+    b = TranscriptBuilder()
+    b.load("hello")
+    assert b.text == "HELLO"
+    b.load("x" * (MAX_TRANSCRIPT_CHARS + 50))
+    assert len(b.text) == MAX_TRANSCRIPT_CHARS
+
+
+def test_load_resets_last_so_identical_next_letter_commits():
+    b = TranscriptBuilder()
+    b.commit_letter("A", 5)
+    b.load("A")
+    assert b.text == "A"
+    # same (letter, timestamp) as the earlier commit would normally dedupe,
+    # but load() cleared _last, so this appends.
+    assert b.commit_letter("A", 5) is True
+    assert b.text == "AA"
+
+
 def test_reset_and_config_surface():
     b = TranscriptBuilder()
     b.commit_letter("x", 1)

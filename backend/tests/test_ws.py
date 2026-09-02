@@ -151,6 +151,28 @@ def test_ws_train_mode_makes_transcript_a_string(ws_app, monkeypatch):
             assert ws.receive_json()["transcript"] == ""
 
 
+def test_ws_load_action_sets_transcript_in_train_mode(ws_app):
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "train"})
+            ws.send_json({"action": "load", "text": "hello"})
+            ws.send_json({"landmarks": None})
+            assert ws.receive_json()["transcript"] == "HELLO"
+
+
+def test_ws_load_action_rejects_non_string_and_keeps_open(ws_app):
+    with TestClient(ws_app) as c:
+        with c.websocket_connect("/ws/predict") as ws:
+            ws.send_json({"mode": "train"})
+            ws.send_json({"action": "load", "text": 123})
+            err = ws.receive_json()
+            assert "error" in err and "timestamp" in err
+            # socket still usable
+            ws.send_json({"landmarks": None})
+            ok = ws.receive_json()
+            assert "error" not in ok and ok["transcript"] == ""
+
+
 def test_ws_unknown_mode_and_action_error_keep_open(ws_app):
     with TestClient(ws_app) as c:
         with c.websocket_connect("/ws/predict") as ws:

@@ -1,53 +1,21 @@
 import { supabase, isSupabaseConfigured } from './supabase'
 
 /**
- * Best (highest) SPM per race duration in seconds. Same shape whether it came
- * from `localStorage` (anonymous) or the Supabase `race_results` table (signed
- * in — reduced client-side to the max SPM per `duration_s`).
+ * Best (highest) SPM per race duration in seconds, read from the Supabase
+ * `race_results` table (reduced client-side to the max SPM per `duration_s`).
+ * Persistence is account-only — logged out means no bests are stored or shown.
  */
 export type Bests = Record<number, number>
 
-const BESTS_KEY = 'squidspell-race-bests'
-
 type RaceResultRow = { duration_s: number; spm: number }
 
-/** Anonymous read: the original `RacePane.loadBests()` logic, verbatim. */
-function loadLocal(): Bests {
-  try {
-    const raw = localStorage.getItem(BESTS_KEY)
-    if (!raw) return {}
-    const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-    const entries = Object.entries(parsed as Record<string, unknown>)
-    if (!entries.every(([, v]) => typeof v === 'number')) return {}
-    const out: Bests = {}
-    for (const [k, v] of entries) out[Number(k)] = v as number
-    return out
-  } catch {
-    return {}
-  }
-}
-
-/** Raise the local best for `durationS` to `spm` (if it beats the stored one), persist, return the map. */
-function bumpLocal(durationS: number, spm: number): Bests {
-  const current = loadLocal()
-  const next =
-    spm > (current[durationS] ?? 0) ? { ...current, [durationS]: spm } : current
-  try {
-    localStorage.setItem(BESTS_KEY, JSON.stringify(next))
-  } catch {
-    /* ignore */
-  }
-  return next
-}
-
-/** True when we should use the `localStorage` store instead of Supabase. */
+/** True when there is no signed-in account to persist against. */
 function anon(userId: string | null): boolean {
   return userId === null || !isSupabaseConfigured || !supabase
 }
 
 export async function loadBests(userId: string | null): Promise<Bests | null> {
-  if (anon(userId)) return loadLocal()
+  if (anon(userId)) return {}
 
   const { data, error } = await supabase!
     .from('race_results')
@@ -55,8 +23,7 @@ export async function loadBests(userId: string | null): Promise<Bests | null> {
     .eq('user_id', userId)
 
   if (error) {
-    // Signed-in failure must NOT read/write the anon store — return null so the
-    // caller keeps whatever bests it already has.
+    // Return null so the caller keeps whatever bests it already has.
     console.warn('[raceStore] load failed; keeping current state', error)
     return null
   }
@@ -77,7 +44,8 @@ export async function recordRaceResult(
     consistency: number | null
   },
 ): Promise<Bests | null> {
-  if (anon(userId)) return bumpLocal(r.duration_s, r.spm)
+  // No account → nothing to persist.
+  if (anon(userId)) return null
 
   const { error } = await supabase!.from('race_results').insert({
     user_id: userId,
@@ -88,7 +56,6 @@ export async function recordRaceResult(
   })
 
   if (error) {
-    // Non-destructive: do not bump the anon store from the signed-in path.
     console.warn('[raceStore] record failed; keeping current state', error)
     return null
   }
