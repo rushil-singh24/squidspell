@@ -1,7 +1,15 @@
--r ../ml/requirements.txt
+# Runtime deps for the prediction server. The heavy ml/ deps
+# (mediapipe, opencv-python, matplotlib) are deliberately NOT included —
+# the server only unpickles the trained models and runs pure-Python /
+# numpy inference. See backend/app/_ml_bridge.py for the ml/ import seam.
 fastapi==0.115.0
 uvicorn[standard]==0.31.0
 websockets==13.1
 python-dotenv==1.0.1
+numpy==1.26.4
+scikit-learn==1.5.2
+joblib==1.4.2
+
+# test-only
 pytest==8.3.3
 httpx==0.27.2

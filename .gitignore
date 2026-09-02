@@ -13,14 +13,12 @@ frontend/dist/
 .env.*
 !.env.example
 
-# ML artifacts — regenerable, kept out of git; ml/models/.gitkeep and
-# ml/data/.gitkeep hold the directories open instead
-ml/models/*.pkl
-ml/models/*.task
+# ML artifacts. Trained models + metrics ARE committed now (Phase 10) so the
+# deployed backend/frontend can build from a clean checkout. Raw capture data
+# and regenerable diagnostic plots stay out.
 ml/data/*.csv
 ml/data/motion_sequences/
 ml/results/*.png
-ml/results/*.json
 
 # Caches
 .pytest_cache/
