@@ -161,17 +161,15 @@ where not exists (
 -- row of `profiles`. Writes are unchanged -- the owner policies above still
 -- restrict INSERT/UPDATE/DELETE to `auth.uid() = user_id` / `= id`.
 --
--- `profiles.email` is therefore world-readable through the `profiles_public_read`
--- policy. That is an accepted trade-off at portfolio scale (a public demo whose
--- only PII is a Google display name + email the user already chose to sign in
--- with); a production build would drop `email` from the public policy or split
--- it into a separate owner-only table.
+-- `profiles` deliberately stores ONLY a display name (no email / no PII beyond
+-- the name the user chose on their Google account) precisely because the row is
+-- world-readable. The client derives `display_name` from the Google full name,
+-- falling back to the email local-part only if there is no name.
 -- ---------------------------------------------------------------------------
 
 create table if not exists public.profiles (
   id           uuid primary key references auth.users on delete cascade,
   display_name text,
-  email        text,
   updated_at   timestamptz not null default now()
 );
 alter table public.profiles enable row level security;

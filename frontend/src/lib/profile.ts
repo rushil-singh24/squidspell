@@ -15,10 +15,15 @@ export async function upsertProfile(user: {
 }): Promise<void> {
   if (!supabase) return
 
+  // Only a display name is stored -- the row is world-readable (leaderboard).
+  // Fall back to the email's local-part (before the @) if there's no name, so
+  // the full address is never persisted.
+  const displayName =
+    user.name ?? user.email?.split('@')[0] ?? 'Anonymous'
+
   const { error } = await supabase.from('profiles').upsert({
     id: user.id,
-    display_name: user.name ?? user.email ?? 'Anonymous',
-    email: user.email,
+    display_name: displayName,
     updated_at: new Date().toISOString(),
   })
 
