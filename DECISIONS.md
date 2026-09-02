@@ -672,3 +672,70 @@ Affects: `TrainPane` / `RacePane` now require a `userId` prop, supplied by
 Supabase env vars). Phase 10 (add the deployed origin to the Supabase redirect
 allowlist; run `database/schema.sql` once). Phase 11 README ("why Supabase over
 custom auth").
+
+## [Phase 9] Docker skipped
+Decided: no containerisation. The $0 deploy path (Vercel builds the frontend from
+the repo; Render runs the backend on its native Python runtime) never needs
+Docker, and local dev already works from a venv + npm. A `Dockerfile.backend`
+could be added later as portfolio polish.
+Why: Docker here was a skill-demonstration line item, not a functional need;
+skipping it removed an install gate and a maintenance surface.
+Affects: `docker/` stays empty; Phase 10 deploys native.
+
+## [Phase 10] Native deploy (Vercel + Render) + committed model artifacts
+Decided:
+- Frontend on **Vercel** (root `frontend/`, Vite preset). Env: `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL=https://squidspell.onrender.com`,
+  `VITE_WS_URL=wss://squidspell.onrender.com/ws/predict`. These are build-time
+  Vite vars — set in the Vercel project, not at runtime.
+- Backend on **Render** free web service (root `backend/`, build
+  `pip install -r requirements.txt`, start
+  `uvicorn app.main:create_app --factory --host 0.0.0.0 --port $PORT`,
+  `PYTHON_VERSION=3.11.9`). Env `SQUIDSPELL_CORS_ORIGINS=https://squidspell.vercel.app`.
+  Free tier spins down after ~15 min idle (~50s cold start) — acceptable for a
+  portfolio link.
+- **Model artifacts are now committed** (`ml/models/*.{pkl,task}`,
+  `ml/results/*.json`, ~26 MB). The "regenerable, keep out of git" rule from
+  Phase 0 was a dev-time choice; a fresh Vercel/Render checkout has no way to
+  regenerate them (raw capture data stays gitignored). Raw `ml/data/*.csv` and
+  the diagnostic `.png` remain ignored.
+- **`backend/requirements.txt` no longer pulls `ml/requirements.txt`.** The server
+  only unpickles the models and runs numpy/pure-Python inference — runtime deps
+  are `fastapi`, `uvicorn`, `websockets`, `python-dotenv`, `numpy`,
+  `scikit-learn`, `joblib`. `mediapipe` / `opencv-python` / `matplotlib` are
+  training/demo-only and `opencv` needs system libs that fail on Render's image.
+- **CI:** `.github/workflows/ci.yml` — backend `pytest` + frontend
+  `oxlint` / `vitest` / `build` on every push and PR. `ml/` tests need the heavy
+  toolchain and run locally only; the inference core is still exercised via the
+  backend WebSocket tests.
+- Supabase: **Site URL** and a `https://squidspell.vercel.app/**` **Redirect URL**
+  were added so Google sign-in works on the deployed origin. The Google OAuth
+  client's redirect URI stays the Supabase callback — unchanged.
+Why: native deploy is zero-cost and zero-Docker; committing the models is the
+only way a clean CI/deploy checkout can serve predictions; the slim backend
+requirements keep the Render build fast and green.
+Affects: retraining is a self-contained loop — `collect_static.py` →
+`train_static.py` → commit `ml/models/` + `ml/results/*.json` → push → Render
+auto-redeploys. No Supabase / env / account work ever again. See the README
+"Improving letter accuracy" section.
+
+## [Phase 10+] Public leaderboard, 30/60/90 race durations
+Decided:
+- `RACE_DURATIONS` is now `(30, 60, 90)` (15s dropped) — backend `race.py`,
+  frontend picker, tests, docs.
+- New `public.profiles` table (`id`, `display_name`, `updated_at` — **no email**,
+  since the row is world-readable). The client upserts its own row on sign-in
+  (`frontend/src/lib/profile.ts`, called from `useAuth`); `display_name` is the
+  Google name, falling back to the email local-part only, never the full address.
+- `race_results` and `profiles` both get a `for select using (true)` policy so
+  the leaderboard is readable signed-out. Owner `for all` policies still govern
+  writes.
+- Leaderboard is a two-query client join (`race_results` top-200 by spm, then
+  `profiles` for the names), bucketed to top-10 per duration
+  (`frontend/src/lib/leaderboard.ts`), shown in a `LeaderboardPanel` toggled from
+  Race mode's pre-race screen.
+Why: a leaderboard is a natural Race feature and a clean demonstration of RLS +
+relational queries; keeping `profiles` to a display name only means the public
+policy exposes nothing the user didn't already put on a public Google profile.
+Affects: the human must re-run `database/schema.sql` once after this change for
+the `profiles` table + policies to exist.

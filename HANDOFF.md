@@ -1,5 +1,23 @@
 # SquidSpell — Handoff
 
+**DEPLOYED & LIVE (2026-09-02):**
+- Frontend: https://squidspell.vercel.app (Vercel, root `frontend/`)
+- Backend: https://squidspell.onrender.com (Render free web service, root `backend/`)
+- Supabase project `nayiiakksapcectgzscr` — Google auth + `translations` / `race_results`
+  / `models` / `profiles`, all RLS. `database/schema.sql` is idempotent; re-run it in the
+  SQL editor after any schema change (last change: `profiles` + leaderboard public-read).
+- CI: `.github/workflows/ci.yml` (backend pytest + frontend oxlint/vitest/build).
+- Model artifacts (`ml/models/*.{pkl,task}`, `ml/results/*.json`) are committed now.
+- Retrain loop is self-contained: `ml/collect_static.py` → `ml/train_static.py` → commit
+  `ml/models/` + `ml/results/*.json` → push → Render auto-redeploys. No infra work.
+- Phases 8 (auth/persistence) and 10 (deploy + CI + leaderboard) verified against the live
+  site: transcripts + races persist to Supabase, Google sign-in works on the deployed origin.
+- Docker (Phase 9) was deliberately skipped — see `DECISIONS.md [Phase 9]`.
+- Open polish: demo GIF (README placeholder), letter accuracy (T/N/M/A/S — data + retrain,
+  see README "Improving letter accuracy"), README/PORTFOLIO.md are written.
+
+---
+
 **Last updated:** Phase 7 (Mode B: Race) code + documentation complete and committed
 (2026-08-30). `/ws/predict` now also handles `mode == "race"`: the connection keeps a
 per-connection `RaceState` (`backend/app/race.py`, pure) alongside the engine, driven by inbound
