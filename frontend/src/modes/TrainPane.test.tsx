@@ -102,7 +102,7 @@ describe('TrainPane', () => {
     expect(save).toHaveAttribute('title', 'Sign in to save')
   })
 
-  it('drives the saved list off entries: reopen + delete callbacks', async () => {
+  it('opens the Saved panel and drives it off entries: reopen + delete callbacks', async () => {
     const user = userEvent.setup()
     const onDelete = vi.fn()
     const onReopen = vi.fn()
@@ -115,18 +115,38 @@ describe('TrainPane', () => {
       />,
     )
 
+    // list is not mounted until the Saved panel is opened
+    expect(screen.queryByRole('list')).toBeNull()
+    await user.click(screen.getByRole('button', { name: /^saved/i }))
+
     await user.click(screen.getByRole('button', { name: 'HELLO WORLD' }))
     expect(onReopen).toHaveBeenCalledWith('HELLO WORLD')
 
+    // reopening closes the panel again
+    expect(screen.queryByRole('list')).toBeNull()
+    await user.click(screen.getByRole('button', { name: /^saved/i }))
     await user.click(
       screen.getByRole('button', { name: /delete saved transcript/i }),
     )
     expect(onDelete).toHaveBeenCalledWith('e1')
   })
 
-  it('renders no saved list when entries is empty', () => {
+  it('Saved panel shows an empty hint and no list when there are no entries', async () => {
+    const user = userEvent.setup()
     render(<TrainPane {...props({ transcript: 'HI', entries: [] })} />)
     expect(screen.queryByRole('list')).toBeNull()
+    await user.click(screen.getByRole('button', { name: /^saved/i }))
+    expect(screen.getByText('No saved transcripts yet.')).toBeInTheDocument()
+    expect(screen.queryByRole('list')).toBeNull()
+  })
+
+  it('Saved panel prompts sign-in when logged out', async () => {
+    const user = userEvent.setup()
+    render(<TrainPane {...props({ transcript: 'HI', userId: null, entries: [] })} />)
+    await user.click(screen.getByRole('button', { name: /^saved/i }))
+    expect(
+      screen.getByText('Sign in to save and revisit transcripts.'),
+    ).toBeInTheDocument()
   })
 
   it('downloads the transcript as a text blob without leaking the anchor or revoking early', async () => {

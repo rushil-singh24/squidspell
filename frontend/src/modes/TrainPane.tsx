@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { CommitPop } from '../motion/CommitPop'
 import { SquidMascot } from '../components/SquidMascot'
@@ -61,11 +61,30 @@ const plainButton: CSSProperties = {
   cursor: 'pointer',
 }
 
+const savedPanel: CSSProperties = {
+  ...panel,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '0.5rem',
+  padding: '0.5rem',
+}
+
+const savedPanelHeader: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  fontSize: '0.75rem',
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: 'var(--sq-fg-muted)',
+  padding: '0.125rem 0.25rem',
+}
+
 const historyList: CSSProperties = {
   listStyle: 'none',
   margin: 0,
   padding: 0,
-  maxHeight: '9rem',
+  flex: 1,
   overflowY: 'auto',
   display: 'flex',
   flexDirection: 'column',
@@ -102,9 +121,15 @@ export const TrainPane = memo(function TrainPane({
   onReopen: (text: string) => void
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [showSaved, setShowSaved] = useState(false)
 
   const empty = transcript === ''
-  const canSave = entries !== undefined && userId != null
+  const canSave = userId != null
+
+  function reopen(text: string) {
+    onReopen(text)
+    setShowSaved(false)
+  }
 
   useEffect(() => {
     const el = scrollRef.current
@@ -134,7 +159,80 @@ export const TrainPane = memo(function TrainPane({
         gap: '0.75rem',
       }}
     >
-      {empty ? (
+      {showSaved ? (
+        <div style={savedPanel}>
+          <div style={savedPanelHeader}>
+            <span>Saved transcripts</span>
+            <button
+              type="button"
+              aria-label="Close saved transcripts"
+              onClick={() => setShowSaved(false)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--sq-fg-muted)',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                lineHeight: 1,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          {userId == null ? (
+            <div style={{ ...emptyState, border: 'none', background: 'transparent' }}>
+              <span>Sign in to save and revisit transcripts.</span>
+            </div>
+          ) : entries.length === 0 ? (
+            <div style={{ ...emptyState, border: 'none', background: 'transparent' }}>
+              <span>No saved transcripts yet.</span>
+            </div>
+          ) : (
+            <ul style={historyList}>
+              {entries.map((entry) => (
+                <li key={entry.id} style={historyItem}>
+                  <span style={{ flexShrink: 0 }}>{relativeTime(entry.savedAt)}</span>
+                  <button
+                    type="button"
+                    onClick={() => reopen(entry.text)}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      textAlign: 'left',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      font: 'inherit',
+                      color: 'var(--sq-fg)',
+                    }}
+                  >
+                    {entry.text.slice(0, 60)}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete saved transcript from ${relativeTime(entry.savedAt)}`}
+                    onClick={() => onDelete(entry.id)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--sq-fg-muted)',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      lineHeight: 1,
+                      flexShrink: 0,
+                    }}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : empty ? (
         <div style={emptyState}>
           <SquidMascot mood="idle" size={96} />
           <span>Sign a letter to start your transcript.</span>
@@ -182,52 +280,24 @@ export const TrainPane = memo(function TrainPane({
         >
           Download
         </button>
+        <button
+          type="button"
+          style={{
+            ...plainButton,
+            ...(showSaved
+              ? {
+                  background: 'var(--sq-accent)',
+                  color: 'var(--sq-bg-deep)',
+                  borderColor: 'var(--sq-accent)',
+                }
+              : null),
+          }}
+          aria-pressed={showSaved}
+          onClick={() => setShowSaved((v) => !v)}
+        >
+          Saved{userId != null && entries.length > 0 ? ` (${entries.length})` : ''}
+        </button>
       </div>
-
-      {entries.length > 0 && (
-        <ul style={historyList}>
-          {entries.map((entry) => (
-            <li key={entry.id} style={historyItem}>
-              <span style={{ flexShrink: 0 }}>{relativeTime(entry.savedAt)}</span>
-              <button
-                type="button"
-                onClick={() => onReopen(entry.text)}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  textAlign: 'left',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  font: 'inherit',
-                  color: 'var(--sq-fg)',
-                }}
-              >
-                {entry.text.slice(0, 40)}
-              </button>
-              <button
-                type="button"
-                aria-label={`Delete saved transcript from ${relativeTime(entry.savedAt)}`}
-                onClick={() => onDelete(entry.id)}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--sq-fg-muted)',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  lineHeight: 1,
-                  flexShrink: 0,
-                }}
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   )
 })
