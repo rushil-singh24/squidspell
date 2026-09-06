@@ -50,11 +50,15 @@ def load_static_dataset(csv_path):
 
 
 def build_candidate_models():
+    # Retrains use RandomForest only. The full 4-model comparison (RF / SVM /
+    # GradientBoosting / LogisticRegression x raw vs engineered features) was
+    # done in Phase 2 -- see ml/results/comparison.md and DECISIONS.md
+    # [Phase 2]. RF won there and in every retrain since; on the full
+    # ~10k-sample dataset SVM, GB, and LR each take 15-40+ min per fit and
+    # never win, so they are not re-run. Restore the dict below to redo the
+    # comparison from scratch.
     return {
         "random_forest": RandomForestClassifier(n_estimators=200, random_state=42),
-        "svm": SVC(kernel="rbf", C=1.0, random_state=42),
-        "gradient_boosting": GradientBoostingClassifier(n_estimators=150, random_state=42),
-        "logistic_regression": LogisticRegression(max_iter=2000, random_state=42),
     }
 
 
@@ -63,7 +67,8 @@ def evaluate_model(model, X, y, cv_folds=5):
         X, y, test_size=0.2, stratify=y, random_state=42
     )
     cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42)
-    cv_scores = cross_val_score(model, X_train, y_train, cv=cv)
+    # n_jobs=-1 runs the CV folds in parallel -- purely a speed change, same result.
+    cv_scores = cross_val_score(model, X_train, y_train, cv=cv, n_jobs=-1)
 
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
@@ -115,7 +120,13 @@ def train_and_export(csv_path, model_out_path, report_out_path,
     results = []
     for feature_set_name, X in feature_sets.items():
         for model_name, model in build_candidate_models().items():
+            print(f"  [{feature_set_name}] fitting {model_name}...", flush=True)
             metrics = evaluate_model(model, X, y)
+            print(
+                f"  [{feature_set_name}] {model_name}: cv={metrics['cv_accuracy_mean']:.4f} "
+                f"test={metrics['test_accuracy']:.4f}",
+                flush=True,
+            )
             results.append({"model": model_name, "feature_set": feature_set_name, **metrics})
 
     best = max(results, key=lambda r: r["cv_accuracy_mean"])
@@ -124,6 +135,8 @@ def train_and_export(csv_path, model_out_path, report_out_path,
         build_candidate_models()[best["model"]],
         TUNING_GRIDS[best["model"]],
         cv=3,
+        n_jobs=-1,
+        verbose=2,
     )
     X_train, X_test, y_train, y_test = train_test_split(
         best_X, y, test_size=0.2, stratify=y, random_state=42
