@@ -10,6 +10,20 @@ Live: https://squidspell.vercel.app · Repo: https://github.com/rushil-singh24/s
 Real-time ASL fingerspelling recognition — webcam → hand landmarks → classifier → live text,
 with a MonkeyType-style timed mode and a public leaderboard.
 
+## Website project card
+
+**SquidSpell** · real-time ASL fingerspelling recognition
+[Live](https://squidspell.vercel.app) · [Code](https://github.com/rushil-singh24/squidspell)
+
+A webcam reads the ASL manual alphabet in real time. Hand tracking runs in the browser
+(MediaPipe); the landmarks stream over a WebSocket to a Python service that classifies
+letters with scikit-learn — 99.4% test accuracy on the 24 static letters, plus a gated
+classifier for the motion letters J and Z. Practice mode plus a MonkeyType-style timed
+mode with a Supabase-backed public leaderboard. React 19 / TypeScript, deployed on
+Vercel + Render, 200+ tests.
+
+`Computer Vision` `scikit-learn` `MediaPipe` `FastAPI` `WebSockets` `React` `TypeScript` `Supabase`
+
 ## Short blurb (2–3 sentences, portfolio card)
 
 SquidSpell reads the ASL manual alphabet from a webcam in real time. Hand tracking runs in the
@@ -34,7 +48,17 @@ Google sign-in via Supabase that persists history and race results across device
 public, Row-Level-Security-backed leaderboard. Deployed on Vercel + Render with GitHub Actions
 CI; 203 automated tests.
 
-## Résumé bullets
+## Résumé bullets — 2-line version
+
+- Built and deployed a full-stack real-time computer-vision app (React/TypeScript · FastAPI ·
+  WebSockets) that recognises ASL fingerspelling from a webcam: in-browser MediaPipe streams
+  hand landmarks to a scikit-learn service reaching **99.4% test accuracy** on 24 static
+  letters, plus a gated trajectory classifier for the motion letters J and Z.
+- Backed it with Supabase (Postgres, **Row-Level Security**, Google OAuth) for per-user history
+  and a public leaderboard, server-authoritative game state over WebSockets, and a GitHub
+  Actions CI pipeline with **200+ automated tests**; live on Vercel + Render.
+
+## Résumé bullets — full version
 
 - Built a full-stack real-time computer-vision app that recognises ASL fingerspelling from a
   webcam: in-browser MediaPipe hand tracking streams 21 landmarks/frame over a WebSocket to a

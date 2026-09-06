@@ -12,6 +12,7 @@ A "frame" is a list of 21 (x, y, z) float tuples; None means no hand detected.
 from __future__ import annotations
 
 import math
+import os
 from collections import Counter, deque
 from dataclasses import dataclass
 
@@ -20,6 +21,15 @@ STATIC_VOTE_WINDOW = 10     # frames in the majority-vote window
 STATIC_STABLE_MS = 550      # majority must hold this long before a letter commits
                            # (8/500 -> 10/550: small bump to stop transitional
                            #  handshapes committing mid-sign, without feeling sluggish)
+
+# Per-frame static predictions below this confidence are dropped (fed to the
+# smoother as None) instead of voting. 0.0 = disabled (default; the model's
+# argmax always votes). Raising it trades commit latency for fewer wrong
+# commits on the genuinely-ambiguous closed-fist letters (T/N/M/A/S), which is
+# the right trade until those classes get more training data. Tune live via the
+# SQUIDSPELL_STATIC_MIN_CONFIDENCE env var (e.g. 0.55) without a redeploy of the
+# code -- Render picks it up on restart.
+STATIC_MIN_CONFIDENCE = float(os.environ.get("SQUIDSPELL_STATIC_MIN_CONFIDENCE", "0.0"))
 
 
 def _majority(labels):
@@ -226,8 +236,10 @@ class InferenceEngine:
         buffer_len=MOTION_BUFFER_LEN,
         smoother=None,
         gate=None,
+        min_confidence=STATIC_MIN_CONFIDENCE,
     ):
         self._static = static_predictor
+        self._min_confidence = min_confidence
         self._buffer = deque(maxlen=buffer_len)
         self._smoother = smoother if smoother is not None else StaticSmoother()
         self._gate = (
@@ -267,10 +279,13 @@ class InferenceEngine:
         else:
             static_label, static_conf = None, 0.0
 
+        # Low-confidence reads don't get a vote -- see STATIC_MIN_CONFIDENCE.
+        voted_label = static_label if static_conf >= self._min_confidence else None
+
         if self._gate.active:
             committed_static = None
         else:
-            committed_static = self._smoother.update(static_label, now_ms)
+            committed_static = self._smoother.update(voted_label, now_ms)
 
         return FrameResult(
             static_label=static_label,

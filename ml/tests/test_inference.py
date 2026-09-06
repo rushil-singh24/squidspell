@@ -224,6 +224,45 @@ def test_engine_static_commit_flows_through():
     assert commits.count("A") == 1
 
 
+def test_engine_min_confidence_gate_suppresses_low_confidence_commit():
+    # static predictor reads "A" but only at 0.40 confidence; with the gate at
+    # 0.55 nothing votes, so the smoother never commits.
+    eng = InferenceEngine(
+        _ScriptedStatic("A", 0.40),
+        _ScriptedMotion("J", 0.9),
+        min_confidence=0.55,
+    )
+    commits = [
+        eng.process_frame(_hand_at(0.5, 0.5), now_ms=t).committed_letter
+        for t in range(0, 1100, 33)
+    ]
+    assert commits.count("A") == 0
+
+    # same read at 0.60 clears the gate and commits once
+    eng2 = InferenceEngine(
+        _ScriptedStatic("A", 0.60),
+        _ScriptedMotion("J", 0.9),
+        min_confidence=0.55,
+    )
+    commits2 = [
+        eng2.process_frame(_hand_at(0.5, 0.5), now_ms=t).committed_letter
+        for t in range(0, 1100, 33)
+    ]
+    assert commits2.count("A") == 1
+
+
+def test_engine_min_confidence_defaults_to_disabled():
+    from inference import STATIC_MIN_CONFIDENCE
+
+    assert STATIC_MIN_CONFIDENCE == 0.0
+    eng = InferenceEngine(_ScriptedStatic("A", 0.01), _ScriptedMotion("J", 0.9))
+    commits = [
+        eng.process_frame(_hand_at(0.5, 0.5), now_ms=t).committed_letter
+        for t in range(0, 1100, 33)
+    ]
+    assert commits.count("A") == 1
+
+
 def test_engine_suppresses_static_commit_while_gate_armed():
     # static predictor always says "I" (a start pose) with high confidence;
     # moving buffer -> gate arms -> static commits must be suppressed

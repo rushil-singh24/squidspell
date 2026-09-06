@@ -1,11 +1,17 @@
 # SquidSpell
 
-**Real-time ASL fingerspelling recognition from a webcam**, built as two experiences on one
-shared prediction engine: **Train** (open-ended fingerspelling → text) and **Race** (a
-MonkeyType-style timed speed/accuracy test with a public leaderboard).
+[![Live demo](https://img.shields.io/badge/demo-squidspell.vercel.app-4f46e5)](https://squidspell.vercel.app)
+[![CI](https://github.com/rushil-singh24/squidspell/actions/workflows/ci.yml/badge.svg)](https://github.com/rushil-singh24/squidspell/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/tests-203%20passing-brightgreen)
+![Static accuracy](https://img.shields.io/badge/static%20model-99.4%25-brightgreen)
 
-> **Live demo:** https://squidspell.vercel.app
-> _First load can take ~50s while the free-tier backend wakes up._
+**Real-time ASL fingerspelling recognition from a webcam.** Hand tracking runs in the browser;
+21 landmarks per frame stream over a WebSocket to a scikit-learn service that classifies the
+26-letter manual alphabet. Two modes on one engine: **Train** (open-ended fingerspelling →
+text) and **Race** (a MonkeyType-style timed speed test with a public leaderboard).
+
+> **Try it:** https://squidspell.vercel.app  —  _first load can take ~50s while the free-tier
+> backend wakes; then it's instant._
 
 > **Scope, honestly:** this reads **fingerspelling** — the 26-letter manual alphabet — not full
 > ASL. Full ASL has whole-word signs, grammar, and facial/body non-manual markers that a
@@ -134,6 +140,12 @@ python train_static.py
 git add ml/models/ ml/results/*.json
 git commit -m "retrain: more T/N/M samples" && git push   # Render auto-redeploys
 ```
+
+**Stopgap without retraining:** set `SQUIDSPELL_STATIC_MIN_CONFIDENCE` (e.g. `0.55`) on the
+Render service. Per-frame predictions below that confidence stop voting, so an ambiguous
+T/N read won't commit a wrong letter — at the cost of needing a cleaner sign. Default `0.0`
+(disabled). Dial it down if good letters stop registering.
+
 
 ## Repo layout
 
