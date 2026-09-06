@@ -62,10 +62,15 @@ export async function loadLeaderboard(): Promise<Record<number, LeaderRow[]>> {
     }
 
     const out = emptyShape()
+    // `results` is spm-desc, so the first row seen for a (bucket, user) pair is
+    // that user's best — one entry per user per bucket.
+    const seen: Record<number, Set<string>> = { 30: new Set(), 60: new Set(), 90: new Set() }
     for (const r of results) {
       if (r.duration_s !== 30 && r.duration_s !== 60 && r.duration_s !== 90) {
         continue // ignore legacy 15s rows
       }
+      if (seen[r.duration_s].has(r.user_id)) continue
+      seen[r.duration_s].add(r.user_id)
       out[r.duration_s].push({
         name: nameMap[r.user_id] ?? 'Anonymous',
         spm: r.spm,
@@ -73,7 +78,6 @@ export async function loadLeaderboard(): Promise<Record<number, LeaderRow[]>> {
         createdAt: Date.parse(r.created_at) || Date.now(),
       })
     }
-    // Query 1 is already sorted desc by spm, so each bucket is too — just cap.
     for (const b of LEADERBOARD_BUCKETS) out[b] = out[b].slice(0, 10)
     return out
   } catch (err) {

@@ -90,16 +90,16 @@ describe('loadLeaderboard', () => {
     expect(Object.keys(board).sort()).toEqual(['30', '60', '90'])
   })
 
-  it('caps each bucket at the top 10 by spm', async () => {
+  it('caps each bucket at the top 10 by spm (one entry per user)', async () => {
     const rows = Array.from({ length: 15 }, (_, i) => ({
-      user_id: 'a',
+      user_id: `u${i}`,
       spm: 100 - i,
       duration_s: 30,
       created_at: '2026-01-01T00:00:00Z',
     }))
     wire(
       { data: rows, error: null },
-      { data: [{ id: 'a', display_name: 'Ada' }], error: null },
+      { data: rows.map((r) => ({ id: r.user_id, display_name: r.user_id })), error: null },
     )
 
     const board = await loadLeaderboard()
@@ -107,6 +107,32 @@ describe('loadLeaderboard', () => {
     expect(board[30]).toHaveLength(10)
     expect(board[30][0].spm).toBe(100)
     expect(board[30][9].spm).toBe(91)
+  })
+
+  it('keeps only each user\'s best result per bucket', async () => {
+    wire(
+      {
+        data: [
+          { user_id: 'a', spm: 90, duration_s: 30, created_at: '2026-01-03T00:00:00Z' },
+          { user_id: 'b', spm: 80, duration_s: 30, created_at: '2026-01-02T00:00:00Z' },
+          { user_id: 'a', spm: 55, duration_s: 30, created_at: '2026-01-01T00:00:00Z' },
+        ],
+        error: null,
+      },
+      {
+        data: [
+          { id: 'a', display_name: 'Ada' },
+          { id: 'b', display_name: 'Bo' },
+        ],
+        error: null,
+      },
+    )
+
+    const board = await loadLeaderboard()
+    expect(board[30].map((r) => [r.name, r.spm])).toEqual([
+      ['Ada', 90],
+      ['Bo', 80],
+    ])
   })
 
   it('returns the empty shape and warns on a query error', async () => {
