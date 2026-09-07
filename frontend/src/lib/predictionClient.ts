@@ -14,6 +14,13 @@ export class PredictionClient {
   private frameCbs: ((e: PredictionEvent) => void)[] = []
   private errorCbs: ((msg: string) => void)[] = []
   private statusCbs: ((s: ConnectionStatus) => void)[] = []
+  // Cap the landmark send rate. The browser produces ~30 fps but a free-tier
+  // backend processes fewer, so unthrottled sends pile up and the committed
+  // letter ends up reflecting a frame from a second or two ago. ~15 fps keeps
+  // the server current; the smoother's stability timer is wall-clock, not
+  // frame-count, so a lower rate doesn't change how long a hold must last.
+  private lastLandmarkSentAt = 0
+  private static readonly MIN_SEND_INTERVAL_MS = 66
 
   constructor(url: string, opts: { WebSocketCtor?: WSCtor; backoff?: number[] } = {}) {
     this.url = url
@@ -72,15 +79,26 @@ export class PredictionClient {
     }
   }
 
-  private rawSend(payload: unknown): void {
+  private rawSend(payload: unknown): boolean {
     const ws = this.ws
-    if (!ws || ws.readyState !== 1 /* OPEN */) return
-    if (ws.bufferedAmount > 65536) return // backend stalled — drop this frame
+    if (!ws || ws.readyState !== 1 /* OPEN */) return false
+    if (ws.bufferedAmount > 16384) return false // backend behind — drop rather than queue a backlog
     ws.send(JSON.stringify(payload))
+    return true
   }
 
   send(landmarks: number[][] | null) {
-    this.rawSend({ landmarks, t: Date.now() })
+    const now = Date.now()
+    // Throttle detected-hand frames to ~15 fps; let a `null` (hand gone)
+    // through immediately so downstream state clears without lag.
+    if (
+      landmarks !== null &&
+      now - this.lastLandmarkSentAt < PredictionClient.MIN_SEND_INTERVAL_MS
+    ) {
+      return
+    }
+    const sent = this.rawSend({ landmarks, t: now })
+    if (sent && landmarks !== null) this.lastLandmarkSentAt = now
   }
 
   setMode(mode: 'train' | 'race' | null): void {

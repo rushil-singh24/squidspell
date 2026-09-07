@@ -25,10 +25,10 @@ from dataclasses import dataclass
 #   SQUIDSPELL_STATIC_STABLE_MS    - how long the majority must hold before a
 #                                   letter commits. lower = less "hold it there"
 #                                   lag; higher = fewer accidental commits.
-# Defaults 7 / 400 favour responsiveness (were 10 / 550). If letters commit too
-# eagerly on transitions, raise toward 9 / 500.
-STATIC_VOTE_WINDOW = int(os.environ.get("SQUIDSPELL_STATIC_VOTE_WINDOW", "7"))
-STATIC_STABLE_MS = float(os.environ.get("SQUIDSPELL_STATIC_STABLE_MS", "400"))
+# Defaults 5 / 300 favour responsiveness (were 10 / 550). If letters commit too
+# eagerly on transitions, raise toward 8 / 450.
+STATIC_VOTE_WINDOW = int(os.environ.get("SQUIDSPELL_STATIC_VOTE_WINDOW", "5"))
+STATIC_STABLE_MS = float(os.environ.get("SQUIDSPELL_STATIC_STABLE_MS", "300"))
 
 # Per-frame static predictions below this confidence are dropped (fed to the
 # smoother as None) instead of voting. 0.0 = disabled (default; the model's
