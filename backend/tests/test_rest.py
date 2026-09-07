@@ -79,6 +79,8 @@ def test_real_model_load_smoke():
         assert c.get("/health").json() == {"status": "ok"}
         info = c.get("/models").json()
         assert len(info["static"]["classes"]) == 24
-        assert info["static"]["feature_set"] == "engineered"
+        # whichever feature set won the last retrain -- the smoke test only cares
+        # that a real model loaded, not which representation it uses.
+        assert info["static"]["feature_set"] in ("raw", "engineered")
         assert info["motion"]["classes"] == ["J", "Z", "negative"]
         assert info["static"]["test_accuracy"] is not None

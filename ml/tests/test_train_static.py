@@ -38,11 +38,12 @@ def test_load_static_dataset_shapes(tiny_csv):
     assert set(y) == {"A", "B", "C"}
 
 
-def test_build_candidate_models_has_four_named_models():
+def test_build_candidate_models_is_rf_only_for_retrains():
+    # Retrains use RandomForest only (SVM / GB / LogisticRegression each take
+    # 15-40+ min per fit on the full dataset and never won the Phase 2
+    # comparison). Restore the full dict in build_candidate_models() to redo it.
     models = build_candidate_models()
-    assert set(models.keys()) == {
-        "random_forest", "svm", "gradient_boosting", "logistic_regression",
-    }
+    assert set(models.keys()) == {"random_forest"}
 
 
 def test_evaluate_model_returns_expected_keys(tiny_csv):

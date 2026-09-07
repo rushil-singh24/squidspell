@@ -44,7 +44,9 @@ export function useHandLandmarker(
           baseOptions: { modelAssetPath: base + 'models/hand_landmarker.task' },
           runningMode: 'VIDEO',
           numHands: 1,
-          minHandDetectionConfidence: 0.7,
+          // 0.7 -> 0.5: lock onto a hand faster and re-acquire quicker after a
+          // brief loss, which shortens the felt lag before a letter registers.
+          minHandDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
         })
         if (cancelled) {

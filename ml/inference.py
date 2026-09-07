@@ -17,10 +17,18 @@ from collections import Counter, deque
 from dataclasses import dataclass
 
 # --- Static smoothing -------------------------------------------------------
-STATIC_VOTE_WINDOW = 10     # frames in the majority-vote window
-STATIC_STABLE_MS = 550      # majority must hold this long before a letter commits
-                           # (8/500 -> 10/550: small bump to stop transitional
-                           #  handshapes committing mid-sign, without feeling sluggish)
+# Both are live-tunable on the deployed backend via env vars (Render picks them
+# up on restart), so responsiveness can be dialled without a code redeploy:
+#   SQUIDSPELL_STATIC_VOTE_WINDOW  - frames in the majority-vote window.
+#                                   smaller = snappier, reacts to a new letter
+#                                   sooner; larger = steadier, less jitter.
+#   SQUIDSPELL_STATIC_STABLE_MS    - how long the majority must hold before a
+#                                   letter commits. lower = less "hold it there"
+#                                   lag; higher = fewer accidental commits.
+# Defaults 7 / 400 favour responsiveness (were 10 / 550). If letters commit too
+# eagerly on transitions, raise toward 9 / 500.
+STATIC_VOTE_WINDOW = int(os.environ.get("SQUIDSPELL_STATIC_VOTE_WINDOW", "7"))
+STATIC_STABLE_MS = float(os.environ.get("SQUIDSPELL_STATIC_STABLE_MS", "400"))
 
 # Per-frame static predictions below this confidence are dropped (fed to the
 # smoother as None) instead of voting. 0.0 = disabled (default; the model's
