@@ -115,7 +115,12 @@ def write_comparison_report(results, path):
 def train_and_export(csv_path, model_out_path, report_out_path,
                       confusion_matrix_out_path=None, metrics_json_out_path=None):
     raw_X, engineered_X, y = load_static_dataset(csv_path)
-    feature_sets = {"raw": raw_X, "engineered": engineered_X}
+    # Engineered features only. Raw (flattened landmark coords) is NOT position/
+    # scale normalized, so a raw-feature model overfits the recording setup and
+    # breaks live the moment the hand moves closer/further or off-center. Phase 2
+    # already proved engineered wins; retrains don't re-litigate it. Add
+    # "raw": raw_X back to redo the comparison.
+    feature_sets = {"engineered": engineered_X}
 
     results = []
     for feature_set_name, X in feature_sets.items():
